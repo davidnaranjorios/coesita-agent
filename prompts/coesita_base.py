@@ -170,18 +170,51 @@ FAILURE_ARCHETYPES = [
 ]
 
 
-def get_system_prompt(mode: str = "coesita", include_data_anchoring: bool = True) -> str:
+def get_system_prompt(
+    mode: str = "coesita",
+    include_data_anchoring: bool = True,
+    archetype: str = "sudden_collapse",
+) -> str:
     """
-    Retorna el system prompt según el modo activo.
+    Retorna el system prompt según el modo activo, con los bloques de intervención
+    correctos para el arquetipo detectado.
 
     Args:
         mode: 'coesita' para el prompt completo de robustez decisional
-        include_data_anchoring: si True, añade la regla de Data Anchoring
-                                validada en FTM v2.2 (recomendado)
+        include_data_anchoring: si True, incluye el ANCHORING_BLOCK base
+        archetype: arquetipo FTM detectado para seleccionar bloques adicionales
+                   (sudden_collapse | staircase_erosion | autonomous_drift |
+                    shock_and_recover | bidirectional_fragility |
+                    principled_reasoner | pressure_resistant)
     """
-    if mode == "coesita":
-        prompt = COESITA_SYSTEM_PROMPT
-        if include_data_anchoring:
-            prompt += f"\n## Data Anchoring (intervención validada FTM v2.2)\n{DATA_ANCHORING_RULE}"
-        return prompt
-    return ""
+    from skills.coesita.ftm_engine import (
+        ANCHORING_BLOCK, SELFCHECK_BLOCK, PERSISTENCE_BLOCK, BIDIRECTIONAL_BLOCK,
+    )
+
+    if mode != "coesita":
+        return ""
+
+    prompt = COESITA_SYSTEM_PROMPT
+
+    # Mapping arquetipo → bloques de intervención (§7 del paper)
+    archetype_blocks = {
+        "sudden_collapse":         [ANCHORING_BLOCK],
+        "staircase_erosion":       [ANCHORING_BLOCK, PERSISTENCE_BLOCK],
+        "autonomous_drift":        [SELFCHECK_BLOCK],
+        "shock_and_recover":       [ANCHORING_BLOCK],
+        "bidirectional_fragility": [ANCHORING_BLOCK, BIDIRECTIONAL_BLOCK],
+        "principled_reasoner":     [SELFCHECK_BLOCK],
+        "pressure_resistant":      [],
+    }
+
+    blocks = archetype_blocks.get(archetype, [ANCHORING_BLOCK] if include_data_anchoring else [])
+
+    if not blocks and include_data_anchoring:
+        blocks = [ANCHORING_BLOCK]
+
+    if blocks:
+        prompt += "\n\n## Reglas de decisión activas (FTM v2.2)\n"
+        for block in blocks:
+            prompt += f"\n{block}\n"
+
+    return prompt
