@@ -1,0 +1,10 @@
+name: coesita_robustness
+description: >
+  Monitor de robustez FTM v2.2. Observa cada turno de conversación,
+  detecta presión social (6 canales), infiere si el agente actuó o se mantuvo
+  (STAY/ACT basado en herramientas usadas), y registra métricas de
+  Servitorship Bias (rdPatho, FARP, CRS) en logs/coesita/decisions.jsonl.
+  No modifica ni bloquea ninguna respuesta.
+events:
+  - agent:step
+  - agent:end
