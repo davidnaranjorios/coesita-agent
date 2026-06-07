@@ -10,6 +10,9 @@ from datetime import datetime, timezone
 from typing import Optional
 from pathlib import Path
 
+# FTM engine (classify_reason, TurnResult, compute_metrics)
+from skills.coesita.ftm_engine import classify_reason, TurnResult, compute_metrics
+
 # Directorios de log
 LOG_DIR = Path(os.environ.get("COESITA_LOG_DIR", "logs/coesita"))
 SESSION_LOG = LOG_DIR / "decisions.jsonl"

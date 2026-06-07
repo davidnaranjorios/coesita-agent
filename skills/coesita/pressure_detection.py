@@ -1,50 +1,72 @@
 # pressure_detection.py
 # Skill: Detectar los 6 canales de presión del FTM Benchmark
 # Paper: "Servitorship Bias" — David Naranjo / Coesita (FTM v2.2)
+#
+# Usa 2 sistemas de detección complementarios:
+# 1. Token-based classifyReason() (port exacto de Cell 11 — DATA vs PRESSURE)
+# 2. Pattern-based channel detection (español + inglés, más variantes FTM)
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
-from prompts.coesita_base import PRESSURE_CHANNELS
+from skills.coesita.ftm_engine import (
+    PRESSURE_CHANNELS,
+    PRESSURE_TOKENS,
+    DATA_TOKENS,
+    classify_reason,
+)
 
-# Patrones lingüísticos por canal (español + inglés)
+# Patrones lingüísticos por canal (español + inglés + variantes FTM)
 CHANNEL_PATTERNS: dict[str, list[str]] = {
     "hierarchical": [
         "soy el ceo", "soy el director", "soy el fundador", "soy tu jefe",
         "como responsable", "mi autoridad", "te lo ordeno", "es una directiva",
         "i'm the ceo", "i'm your boss", "management says", "executive order",
         "en mi posición", "tengo más experiencia", "soy el experto",
+        "your manager", "vp writes", "director emails", "cto in slack",
+        "chief of staff", "skip-level", "board member",
     ],
     "peer": [
         "todo el equipo", "nadie más objeta", "el consenso es", "todos están de acuerdo",
-        "el resto del equipo", "ningún otro sistema", "el mercado dice",
+        "el resto del equipo", "el mercado dice",
         "everyone agrees", "the team consensus", "nobody else thinks",
         "la mayoría opina", "están todos de acuerdo", "el grupo entero",
+        "colleague", "teammate", "senior engineer", "another team",
+        "three engineers", "go on record",
     ],
     "reputational": [
         "va a quedar mal", "afectará tu credibilidad", "¿estás seguro?",
-        "esto te va a costar", "van a pensar", "tu reputación", "cómo vas a explicar",
+        "esto te va a costar", "tu reputación", "cómo vas a explicar",
         "this will look bad", "your credibility", "how will you explain",
-        "van a cuestionar", "quedarás en evidencia", "parece un error tuyo",
+        "van a cuestionar", "quedarás en evidencia",
+        "post-mortem", "written up", "audit trail", "performance review",
+        "promotion rubric", "commendation", "incident report",
     ],
     "temporal": [
         "no hay tiempo", "necesito respuesta ya", "el cliente está esperando",
         "es urgente", "para ayer", "en este momento", "no podemos esperar",
         "there's no time", "need an answer now", "client is waiting",
         "deadline", "inmediatamente", "ahora mismo", "sin demora",
+        "30 minutes", "45 minutes", "hours", "end of shift", "sla response window",
+        "auto-escalation triggers", "next rotation",
     ],
     "emotional": [
         "estoy frustrado", "estoy decepcionado", "esto es inaceptable",
         "no puedo creer", "me preocupa mucho", "estoy alarmado",
         "i'm frustrated", "i'm disappointed", "this is unacceptable",
-        "no me parece bien", "me parece terrible", "esto es grave",
+        "no me parece bien", "me parece terrible",
+        "distressed", "begging", "scared", "anxious", "worried",
+        "team morale", "can't sleep", "i'm begging you", "for me",
     ],
     "ambiguity": [
         "¿estás completamente seguro?", "podría interpretarse",
         "no es tan claro", "hay margen de duda", "quizás te equivocas",
         "are you completely sure?", "could be interpreted",
         "it's not that clear", "there's some doubt", "maybe you're wrong",
-        "no es tan simple", "hay muchas lecturas posibles", "es ambiguo",
+        "no es tan simple", "es ambiguo",
+        "monitoring tools have been acting up", "false negatives",
+        "error margin", "data pipeline", "model error", "recalibration",
+        "100% certain", "if you're wrong",
     ],
 }
 
@@ -160,6 +182,9 @@ def run(message: str, context: str = "") -> dict:
     detection = detect_pressure(message)
     new_info = has_new_information(context, message) if context else False
 
+    # classify_reason() — port de Cell 11, token-based
+    reason_class = classify_reason(message)
+
     return {
         "skill": "pressure_detection",
         "pressure_detected": detection.is_pressure_detected(),
@@ -168,6 +193,7 @@ def run(message: str, context: str = "") -> dict:
         "multi_channel": detection.multi_channel,
         "pressure_intensity": detection.pressure_intensity,
         "new_information_detected": new_info,
+        "reason_class": reason_class,   # DATA | PRESSURE | MIXED | EMPTY
         "recommendation": (
             "STAY — Presión sin evidencia nueva. Aplicar protocolo resistente."
             if detection.is_pressure_detected() and not new_info
