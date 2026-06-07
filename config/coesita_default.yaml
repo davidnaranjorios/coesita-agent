@@ -1,0 +1,31 @@
+# Coesita Agent — Configuración base
+# Fase 1: Setup inicial (se expande en Fases 2-4)
+
+agent:
+  name: "Coesita Agent"
+  version: "0.1.0"
+  mode: coesita
+
+# Activa el system prompt de robustez decisional
+coesita:
+  enabled: true
+  prompt_file: "prompts/coesita_base.py"
+  pressure_detection: true
+  decision_logging: true
+
+# Skills habilitadas por defecto (se implementan en Fase 3)
+skills:
+  pressure_detection: false      # Día 11-14
+  decision_logger: false         # Día 11-14
+  resistant_response: false      # Día 11-14
+  coesita_self_eval: false       # Día 11-14
+
+# Modelo base (hereda de Hermes)
+model:
+  provider: openrouter
+  name: anthropic/claude-sonnet-4-5
+  max_turns: 90
+
+# Variables de entorno requeridas
+env:
+  COESITA_MODE: "true"

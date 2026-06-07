@@ -1,4 +1,21 @@
+# Secrets
+.env
+*.env
+*.key
+
+# Logs y resultados temporales de pruebas
+logs/
+*.log
+
+# OS
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
 /venv/
 /venv.old/
 /_pycache/

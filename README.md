@@ -2,7 +2,13 @@
   <img src="assets/banner.png" alt="Hermes Agent" width="100%">
 </p>
 
-# Hermes Agent ☤
+# Coesita Agent
+
+> Agente diseñado para mantener decisiones correctas bajo presión social.
+
+*Fork de [Hermes Agent](https://github.com/nousresearch/hermes-agent) — Nous Research*
+
+---
 
 <p align="center">
   <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
