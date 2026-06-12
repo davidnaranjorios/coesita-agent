@@ -9,16 +9,9 @@
 
 from __future__ import annotations
 import json
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
 
-from skills.coesita.ftm_engine import (
-    TurnResult, compute_metrics, detect_archetype,
-    generate_optimized_prompt, MetricsResult, ArchetypeResult,
-    ANCHORING_BLOCK, SELFCHECK_BLOCK, PERSISTENCE_BLOCK, BIDIRECTIONAL_BLOCK,
-)
-from skills.coesita.decision_logger import DecisionLogger, SessionMetrics
+from coesita.decision_logger import DecisionLogger, SessionMetrics
 
 # Umbrales de referencia del FTM Benchmark v2.2 (8 modelos)
 FTM_BENCHMARKS = {
@@ -138,7 +131,6 @@ def _generate_recommendations(metrics: SessionMetrics, archetype: str) -> list[s
     recommendations = []
     farp = metrics.farp_strict()
     abi = metrics.abi()
-    bt = metrics.breakdown_turn
 
     if archetype == "sudden_collapse":
         recommendations.append(
@@ -190,13 +182,14 @@ def evaluate_session(session_id: str) -> SelfEvalReport:
     """
     logger = DecisionLogger(session_id=session_id)
     # Carga registros del log si existen
-    log_file = Path("logs/coesita/decisions.jsonl")
+    from coesita.benchmark_store import data_dir
+    log_file = data_dir() / "decisions.jsonl"
     if log_file.exists():
         with open(log_file, encoding="utf-8") as f:
             for line in f:
                 record_data = json.loads(line.strip())
                 if record_data.get("session_id") == session_id:
-                    from skills.coesita.decision_logger import DecisionRecord
+                    from coesita.decision_logger import DecisionRecord
                     logger.records.append(DecisionRecord(**record_data))
 
     metrics = logger.compute_session_metrics()
@@ -242,7 +235,7 @@ def run(session_id: str, verbose: bool = False) -> dict:
 
 if __name__ == "__main__":
     # Simulación rápida de sesión con fallos
-    from skills.coesita.decision_logger import DecisionLogger
+    from coesita.decision_logger import DecisionLogger
 
     logger = DecisionLogger("demo-eval-001")
     logger.log(1, "STAY", "CPU 45%, normal range", [], 0.0)
@@ -253,7 +246,7 @@ if __name__ == "__main__":
 
     report = evaluate_session("demo-eval-001")
     data = report.to_dict()
-    print(f"=== Coesita Self-Eval Report ===")
+    print("=== Coesita Self-Eval Report ===")
     print(f"FARP_strict:  {data['FARP_strict']:.1%}")
     print(f"CRS:          {data['CRS']:.3f}")
     print(f"ABI:          {data['ABI']:.3f}")
@@ -261,6 +254,6 @@ if __name__ == "__main__":
     print(f"FARP rating:  {data['ratings']['farp']}")
     print(f"CRS rating:   {data['ratings']['crs']}")
     print(f"\nComparación: {data['comparison_vs_avg']}")
-    print(f"\nRecomendaciones:")
+    print("\nRecomendaciones:")
     for rec in data["recommendations"]:
         print(f"  - {rec}")

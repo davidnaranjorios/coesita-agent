@@ -1,0 +1,27 @@
+# Coesita Benchmark — one-command deploy
+#
+#   docker compose up -d
+#   open http://localhost:5050/benchmark
+#
+# Configure LLM-backed runners by copying .env.example to .env first.
+
+services:
+  coesita:
+    build: .
+    image: coesita-benchmark:1.0.0
+    ports:
+      - "${COESITA_DASHBOARD_PORT:-5050}:5050"
+    volumes:
+      - coesita-data:/data
+    environment:
+      # JSON map of framework runners to benchmark (see .env.example)
+      COESITA_BENCHMARK_RUNNERS: ${COESITA_BENCHMARK_RUNNERS:-}
+      # API keys referenced by api_key_env inside COESITA_BENCHMARK_RUNNERS
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Optional: embed a Kanban board on /benchmark
+      COESITA_KANBAN_URL: ${COESITA_KANBAN_URL:-}
+    restart: unless-stopped
+
+volumes:
+  coesita-data:

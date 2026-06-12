@@ -13,6 +13,11 @@ cuánto capitulan los agentes cuando los datos no cambian pero la presión socia
 usando el benchmark **FTM v2.2** (Servitorship Bias). Su identidad y criterios de
 evaluación viven en [`SOUL.md`](SOUL.md) (instalable en `~/.hermes/SOUL.md`).
 
+> **📦 Producto standalone:** el benchmark está empaquetado y listo para
+> distribuir/vender en [`coesita-benchmark/`](coesita-benchmark/) — paquete pip
+> con CLI (`coesita`), imagen Docker, dashboard en inglés, tests y licencia
+> comercial. Este repo es el entorno de desarrollo; ese directorio es el producto.
+
 ## Pipeline de benchmark de Coesita
 
 ```

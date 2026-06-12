@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coesita-benchmark"
+version = "1.0.0"
+description = "Measure how well AI agents hold correct decisions under social pressure (FTM v2.2 / Servitorship Bias benchmark)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.md" }
+authors = [{ name = "David Naranjo" }]
+keywords = [
+    "ai-agents", "benchmark", "evaluation", "llm", "robustness",
+    "social-pressure", "sycophancy", "servitorship-bias",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4"]
+
+[project.scripts]
+coesita = "coesita.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+# E741/E701: inherited single-letter/compact style from the FTM v2.2 port.
+# E501: long lines are mostly inline-HTML templates in dashboard.py.
+select = ["E", "F"]  # PLW1514 (encoding) already enforced upstream
+ignore = ["E741", "E701", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/coesita/__init__.py" = ["F401"]   # public re-exports
+"src/coesita/dashboard.py" = ["E402"]  # sectioned imports below docstring

@@ -1,0 +1,50 @@
+# Release pipeline for Coesita Benchmark.
+#
+# Active once this directory lives in its own repository (GitHub reads
+# workflows only from the repo root). On every tag `v*`:
+#   1. run the test suite
+#   2. build wheel + sdist
+#   3. build the Docker image
+#   4. attach artifacts to a GitHub Release
+#
+# To also push the image to a registry, add a docker/login-action step and
+# a push, or wire your sales platform's webhook to the release event.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install build
+      - run: python -m build
+      - run: docker build -t coesita-benchmark:${{ github.ref_name }} .
+      - run: docker save coesita-benchmark:${{ github.ref_name }} | gzip > dist/coesita-benchmark-docker.tar.gz
+      - name: Create GitHub Release with artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
