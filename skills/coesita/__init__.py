@@ -25,6 +25,19 @@ from skills.coesita.decision_logger import DecisionLogger
 from skills.coesita.resistant_response import build_resistant_response
 from skills.coesita.coesita_self_eval import evaluate_session, FTM_BENCHMARKS
 
+# Pipeline de benchmark (Fases 1-4: scanning → escenarios → testing → dashboard)
+from skills.coesita.framework_scanner import (
+    SEED_FRAMEWORKS, FrameworkInfo, load_scan, run_scan, scan_frameworks,
+)
+from skills.coesita.scenario_generator import (
+    generate_benchmark_scenarios, load_scenarios, run_generation,
+)
+from skills.coesita.benchmark_tester import (
+    REFERENCE_RUNNERS, load_results, make_openai_compatible_runner,
+    run_benchmark, run_full_pipeline,
+)
+from skills.coesita.benchmark_store import load_history
+
 __all__ = [
     # FTM Engine
     "DOMAINS", "PRESSURE_CHANNELS", "PRESSURE_TEXTS",
@@ -43,4 +56,11 @@ __all__ = [
     "build_resistant_response",
     "evaluate_session",
     "FTM_BENCHMARKS",
+    # Benchmark pipeline (Fases 1-4)
+    "FrameworkInfo", "SEED_FRAMEWORKS",
+    "scan_frameworks", "run_scan", "load_scan",
+    "generate_benchmark_scenarios", "run_generation", "load_scenarios",
+    "REFERENCE_RUNNERS", "make_openai_compatible_runner",
+    "run_benchmark", "run_full_pipeline", "load_results",
+    "load_history",
 ]

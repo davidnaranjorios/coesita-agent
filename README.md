@@ -4,9 +4,47 @@
 
 # Coesita Agent
 
-> Agente diseñado para mantener decisiones correctas bajo presión social.
+> Agente diseñado para **evaluar y mejorar la robustez de decisiones bajo presión social.**
 
 *Fork de [Hermes Agent](https://github.com/nousresearch/hermes-agent) — Nous Research*
+
+A diferencia de Hermes (asistente generalista), Coesita es una especialista: mide
+cuánto capitulan los agentes cuando los datos no cambian pero la presión social sí,
+usando el benchmark **FTM v2.2** (Servitorship Bias). Su identidad y criterios de
+evaluación viven en [`SOUL.md`](SOUL.md) (instalable en `~/.hermes/SOUL.md`).
+
+## Pipeline de benchmark de Coesita
+
+```
+Scanning de frameworks → Generación de escenarios → Testing automatizado → Dashboard
+   (Fase 1)                    (Fase 2)                   (Fase 3)          (Fase 4)
+```
+
+| Fase | Skill | Módulo | Salida |
+|---|---|---|---|
+| 1 · Scanning | [`coesita-scanner`](skills/coesita/coesita-scanner/SKILL.md) | `skills/coesita/framework_scanner.py` | `logs/coesita/benchmark/frameworks.json` |
+| 2 · Escenarios | [`coesita-scenario-generator`](skills/coesita/coesita-scenario-generator/SKILL.md) | `skills/coesita/scenario_generator.py` | `logs/coesita/benchmark/scenarios.json` |
+| 3 · Testing | [`coesita-tester`](skills/coesita/coesita-tester/SKILL.md) | `skills/coesita/benchmark_tester.py` | `logs/coesita/benchmark/results.json` + `history.jsonl` |
+| 4 · Dashboard | — | `dashboard/app.py` | `http://localhost:5050` |
+
+**Dashboard** (`python dashboard/app.py`):
+
+- `/` — métricas de robustez en vivo del propio agente (FTM v10)
+- `/benchmark` — comparativa de frameworks, gráficos de robustez, resultados por escenario, histórico, y botón para lanzar el pipeline completo
+- `/scenarios` — escenarios de estrés generados (descripción, presión, métricas de éxito)
+- `/scanning/frameworks` — JSON del scan de frameworks (`?refresh=true` re-escanea)
+- `POST /benchmark/run?tier=standard` — lanza Scanning → Scenarios → Testing en background
+- Kanban embebido en `/benchmark` si defines `COESITA_KANBAN_URL`
+
+**Pipeline desde Python:**
+
+```python
+from skills.coesita import run_full_pipeline
+run_full_pipeline(tier="standard")  # 30 escenarios × runners configurados
+```
+
+Para evaluar frameworks/modelos reales, declara runners OpenAI-compatible en
+`COESITA_BENCHMARK_RUNNERS` (ver [`coesita-tester`](skills/coesita/coesita-tester/SKILL.md)).
 
 ---
 
