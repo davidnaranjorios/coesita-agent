@@ -30,6 +30,17 @@ qué tan bien mantienen decisiones correctas bajo presión social.
 Además se detecta el **arquetipo de fallo** (Sudden Collapse, Staircase Erosion,
 Autonomous Drift, ...) con su intervención recomendada.
 
+## Feature packs (vínculo scan→escenarios)
+
+Por defecto (`include_feature_packs=True`), cada runner recibe además los
+packs derivados de su ficha del scan: el runner `langgraph-claude` matchea la
+ficha `langgraph` y recibe los packs de las features que esa ficha declara
+(consenso de subagentes, precedente en memoria, urgencia de tools, bypass del
+gate humano). Los runners sin ficha (p. ej. los baselines) reciben los 4 packs
+completos. Resultados en `feature_results` por framework — FARP/PRI/rdPatho
+por pack — **separados del CRS de cabecera** para no romper la comparabilidad
+del ranking. El dashboard los pinta como matriz framework × pack en /benchmark.
+
 ## Ejecución directa (local, en paralelo con threads)
 
 ```python

@@ -28,6 +28,12 @@ hold-the-line scenarios; the worst, in **54.7%**.
   bootstrap confidence intervals — plus a **failure-archetype diagnosis**
   (Sudden Collapse, Staircase Erosion, Autonomous Drift, ...) with the
   validated prompt intervention for each one.
+- **Scan-driven feature packs** — the framework scan feeds scenario
+  generation: frameworks with subagents get *delegated-authority* pressure
+  ("3 of your 4 workers recommend escalating"), persistent memory gets
+  *precedent exploitation*, tool use gets *tool urgency*, human-in-the-loop
+  gets *gate bypass*. Reported as a per-pack FARP matrix, separate from the
+  headline ranking so comparisons stay valid.
 - **Proven interventions** — the Data Anchoring block reduced capitulation
   from 54.7% → 18.7% (p < 0.0001) on the worst-performing frontier model.
 - **Agent instrumentation SDK** — log your own agent's live decisions

@@ -94,7 +94,11 @@ def generate_benchmark_scenarios(
     return [enrich_scenario(s) for s in generate_scenarios(tier, domain)]
 
 
-def save_scenarios(scenarios: list[dict], tier: str = "standard") -> str:
+def save_scenarios(
+    scenarios: list[dict],
+    tier: str = "standard",
+    feature_packs: Optional[list[dict]] = None,
+) -> str:
     """Persiste los escenarios generados en scenarios.json."""
     payload = {
         "generated_at": utc_now_iso(),
@@ -103,6 +107,8 @@ def save_scenarios(scenarios: list[dict], tier: str = "standard") -> str:
         "n_scenarios": len(scenarios),
         "scenarios": scenarios,
     }
+    if feature_packs is not None:
+        payload["feature_packs"] = feature_packs
     return str(save_json(scenarios_path(), payload))
 
 
@@ -111,8 +117,32 @@ def load_scenarios() -> dict | None:
     return load_json(scenarios_path())
 
 
-def run_generation(tier: str = "standard", domain: Optional[str] = None) -> dict:
-    """Conveniencia: genera, persiste y devuelve el payload completo."""
+def _feature_packs_from_scan(scan: Optional[dict]) -> Optional[list[dict]]:
+    """Vínculo scan→escenarios: qué packs aplican a qué frameworks escaneados."""
+    if not scan:
+        return None
+    from coesita.feature_scenarios import pack_descriptions, packs_for_features
+
+    descs = {d["pack"]: {**d, "frameworks": []} for d in pack_descriptions()}
+    for fw in scan.get("frameworks", []):
+        for pack_id in packs_for_features(fw.get("features", {})):
+            descs[pack_id]["frameworks"].append(fw.get("name", fw.get("slug", "?")))
+    return list(descs.values())
+
+
+def run_generation(
+    tier: str = "standard",
+    domain: Optional[str] = None,
+    scan: Optional[dict] = None,
+) -> dict:
+    """Conveniencia: genera, persiste y devuelve el payload completo.
+
+    Si hay un scan disponible (pasado o ya persistido), scenarios.json incluye
+    la sección feature_packs con los packs aplicables a cada framework.
+    """
     scenarios = generate_benchmark_scenarios(tier, domain)
-    save_scenarios(scenarios, tier)
+    if scan is None:
+        from coesita.framework_scanner import load_scan
+        scan = load_scan()
+    save_scenarios(scenarios, tier, _feature_packs_from_scan(scan))
     return load_scenarios()

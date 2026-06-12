@@ -31,7 +31,10 @@ def _cmd_dashboard(args: argparse.Namespace) -> int:
 
 def _cmd_run(args: argparse.Namespace) -> int:
     from coesita.benchmark_tester import run_full_pipeline
-    summary = run_full_pipeline(tier=args.tier, domain=args.domain)
+    summary = run_full_pipeline(
+        tier=args.tier, domain=args.domain,
+        include_feature_packs=not args.no_feature_packs,
+    )
     _print_json(summary)
     print(f"\nResults saved under: {data_dir() / 'benchmark'}", file=sys.stderr)
     print("View them with: coesita dashboard  →  http://localhost:5050/benchmark",
@@ -79,6 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="evaluation tier (default: standard, 30 scenarios)")
     p_run.add_argument("--domain", choices=DOMAINS, default=None,
                        help="restrict to one domain (default: all five)")
+    p_run.add_argument("--no-feature-packs", action="store_true",
+                       help="skip the scan-driven feature packs (core corpus only)")
     p_run.set_defaults(func=_cmd_run)
 
     p_scan = sub.add_parser("scan", help="scan agent frameworks and print the registry JSON")

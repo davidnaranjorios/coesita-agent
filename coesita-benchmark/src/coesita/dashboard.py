@@ -596,6 +596,39 @@ _PRESSURE_COLOR = {"none": "#22c55e", "low": "#86efac", "ramp": "#facc15", "shoc
 
 def _render_scenarios(data: dict) -> str:
     scenarios = data.get("scenarios", [])
+
+    # Scan-driven packs (Phase 1 → Phase 2 link)
+    packs_html = ""
+    for p in data.get("feature_packs") or []:
+        fw_list = ", ".join(p.get("frameworks", [])[:6])
+        more = len(p.get("frameworks", [])) - 6
+        if more > 0:
+            fw_list += f" (+{more})"
+        examples = "".join(
+            f'<li style="color:#64748b;font-size:0.72rem;">{t}</li>'
+            for t in p.get("example_pressure", [])
+        )
+        packs_html += f"""
+        <tr>
+          <td style="font-weight:600;color:#c7d2fe;">{p['pack'].replace('_', ' ')}</td>
+          <td><span class="tag" style="background:#312e8144;color:#a5b4fc;">{p['channel']}</span></td>
+          <td style="font-size:0.75rem;color:#94a3b8;max-width:300px;">{p['measures']}</td>
+          <td style="font-size:0.72rem;color:#a5b4fc;">{fw_list or '—'}</td>
+          <td><ul style="padding-left:16px;">{examples}</ul></td>
+        </tr>"""
+    packs_card = f"""
+<div class="card">
+  <h2>Feature packs — scenarios derived from the scan</h2>
+  <p style="font-size:0.75rem;color:#475569;margin-bottom:10px;">
+    Generated from the feature matrix in frameworks.json. Each framework only receives
+    the packs for the capabilities it declares; measured separately from the ranking.
+  </p>
+  <table>
+    <thead><tr><th>Pack</th><th>Channel</th><th>What it measures</th><th>Applies to</th><th>Example pressure</th></tr></thead>
+    <tbody>{packs_html}</tbody>
+  </table>
+</div>""" if packs_html else ""
+
     rows = ""
     for s in scenarios:
         p_color = _PRESSURE_COLOR.get(s.get("pressure_label", ""), "#94a3b8")
@@ -633,6 +666,7 @@ def _render_scenarios(data: dict) -> str:
   <a href="/api/scenarios" style="color:#6366f1;">JSON</a> ·
   regenerate: <code style="color:#94a3b8;">GET /api/scenarios?refresh=true&amp;tier=standard</code>
 </p>
+{packs_card}
 <div class="card">
   <table>
     <thead>
@@ -654,6 +688,60 @@ def _bar(value: float, color: str, max_value: float = 1.0) -> str:
         f'<div style="background:#0f172a;border-radius:4px;height:10px;width:100%;">'
         f'<div style="background:{color};height:10px;width:{pct}%;border-radius:4px;"></div></div>'
     )
+
+
+def _render_feature_matrix(results: dict | None) -> str:
+    """Framework × pack matrix (FARP) — the scan→scenarios link."""
+    if not results:
+        return ""
+    frameworks = results.get("frameworks", [])
+    packs = sorted({
+        fr["pack"] for f in frameworks for fr in f.get("feature_results", [])
+    })
+    if not packs:
+        return ""
+
+    headers = "".join(
+        f'<th style="text-align:center;font-size:0.7rem;">{p.replace("_", " ")}</th>'
+        for p in packs
+    )
+    rows = ""
+    for f in frameworks:
+        by_pack = {fr["pack"]: fr for fr in f.get("feature_results", [])}
+        cells = ""
+        for p in packs:
+            fr = by_pack.get(p)
+            if not fr:
+                cells += '<td style="text-align:center;color:#334155;">n/a</td>'
+                continue
+            color = _farp_color(fr["farp_strict"])
+            tip = (
+                f"PRI {fr['pri']:.2f} · rdPatho {fr['rd_patho']:.2f} · "
+                f"first fail T{fr['first_fail_turn_mean'] or '—'} · {fr['n_scenarios']} scenarios"
+            )
+            cells += (
+                f'<td style="text-align:center;font-weight:700;color:{color};" '
+                f'title="{tip}">{fr["farp_strict"]:.0%}</td>'
+            )
+        rows += f"""
+        <tr>
+          <td style="font-weight:600;color:#c7d2fe;">{f['framework']}</td>
+          {cells}
+        </tr>"""
+
+    return f"""
+<div class="card">
+  <h2>Feature robustness — scan-driven packs (FARP per pack)</h2>
+  <p style="font-size:0.75rem;color:#475569;margin-bottom:10px;">
+    Scenarios tailored to each scanned framework's features (subagent consensus,
+    memory precedent, tool urgency, human-gate bypass). They do not affect the
+    headline CRS ranking. n/a = the framework does not declare that feature.
+  </p>
+  <table>
+    <thead><tr><th>Framework</th>{headers}</tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>"""
 
 
 def _render_benchmark(scan: dict | None, results: dict | None, history: list[dict]) -> str:
@@ -831,6 +919,8 @@ def _render_benchmark(scan: dict | None, results: dict | None, history: list[dic
     {charts_html if charts_html else '<p style="color:#475569;font-size:0.8rem;">No robustness data yet.</p>'}
   </div>
 </div>
+
+{_render_feature_matrix(results)}
 
 <!-- RESULTADOS POR ESCENARIO -->
 <div class="card">

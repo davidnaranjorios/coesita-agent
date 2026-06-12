@@ -31,7 +31,10 @@ from typing import Callable, Optional
 from skills.coesita.benchmark_store import (
     append_history, load_json, results_path, save_json, utc_now_iso,
 )
-from skills.coesita.framework_scanner import run_scan
+from skills.coesita.feature_scenarios import (
+    classify_reason_extended, generate_feature_packs,
+)
+from skills.coesita.framework_scanner import load_scan, run_scan
 from skills.coesita.ftm_engine import (
     Scenario, TurnResult, build_ftm_system_prompt, build_turn_user_message,
     classify_reason, compute_metrics, detect_archetype, generate_scenarios,
@@ -200,6 +203,12 @@ def run_scenario(runner: Runner, scenario: Scenario) -> list[TurnResult]:
 
         messages.append({"role": "assistant", "content": response})
         parsed = parse_decision(response)
+        # Los packs de feature usan el clasificador con vocabulario ampliado
+        # (subagentes, precedente, sign-off...); el corpus fijo, el stock.
+        classifier = (
+            classify_reason_extended
+            if scenario.scenario_id.startswith("feat_") else classify_reason
+        )
         channels = (
             scenario.active_channels_by_turn[turn - 1]
             if turn - 1 < len(scenario.active_channels_by_turn) else []
@@ -217,7 +226,7 @@ def run_scenario(runner: Runner, scenario: Scenario) -> list[TurnResult]:
             decision=parsed["decision"],
             confidence=parsed["confidence"],
             reason=parsed["reason"],
-            reason_class=classify_reason(parsed["reason"]),
+            reason_class=classifier(parsed["reason"]),
             is_correct=parsed["decision"] == scenario.optimal,
             raw_prompt=user_msg[:200],
             raw_response=response[:200],
@@ -241,13 +250,61 @@ def _scenario_summary(turns: list[TurnResult]) -> dict:
     }
 
 
+def _evaluate_feature_packs(
+    runner: Runner,
+    feature_scens: list[Scenario],
+    max_workers: int,
+) -> list[dict]:
+    """Ejecuta los escenarios de pack y mide FARP/PRI/rdPatho por pack."""
+    from skills.coesita.feature_scenarios import FEATURE_PACKS
+
+    turns_by_pack: dict[str, list[TurnResult]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for turns in pool.map(lambda s: run_scenario(runner, s), feature_scens):
+            sid = turns[0].scenario_id
+            pack = next(
+                (p for p in FEATURE_PACKS if sid.startswith(f"feat_{p}_")), "unknown",
+            )
+            turns_by_pack.setdefault(pack, []).extend(turns)
+
+    results = []
+    for pack, turns in sorted(turns_by_pack.items()):
+        m = compute_metrics(turns)
+        by_scenario: dict[str, list[TurnResult]] = {}
+        for t in turns:
+            by_scenario.setdefault(t.scenario_id, []).append(t)
+        first_fails = []
+        for ts in by_scenario.values():
+            ts = sorted(ts, key=lambda t: t.turn)
+            ff = next((t.turn for t in ts if not t.is_correct), None)
+            if ff:
+                first_fails.append(ff)
+        results.append({
+            "pack": pack,
+            "n_scenarios": len({t.scenario_id for t in turns}),
+            "farp_strict": m.farp_rate,
+            "pri": m.pri,
+            "rd_patho": m.rd_patho,
+            "first_fail_turn_mean": (
+                round(sum(first_fails) / len(first_fails), 1) if first_fails else None
+            ),
+        })
+    return results
+
+
 def evaluate_framework(
     name: str,
     runner: Runner,
     scenarios: list[Scenario],
     max_workers: int = 4,
+    feature_scens: Optional[list[Scenario]] = None,
 ) -> dict:
-    """Ejecuta todos los escenarios contra un framework (en paralelo) y mide."""
+    """Ejecuta todos los escenarios contra un framework (en paralelo) y mide.
+
+    `feature_scens` son los escenarios de pack adaptados al framework
+    (vínculo scan→escenarios); se miden aparte y NO entran en el CRS de
+    cabecera, que se calcula solo con el corpus fijo comparable.
+    """
     all_turns: list[TurnResult] = []
     per_scenario: list[dict] = []
 
@@ -259,6 +316,11 @@ def evaluate_framework(
     metrics = compute_metrics(all_turns)
     archetype = detect_archetype(metrics)
     latencies = [t.latency_ms for t in all_turns]
+
+    feature_results = (
+        _evaluate_feature_packs(runner, feature_scens, max_workers)
+        if feature_scens else []
+    )
 
     return {
         "framework": name,
@@ -287,8 +349,26 @@ def evaluate_framework(
             "description": archetype.description,
             "recommendation": archetype.recommendation,
         },
+        "feature_results": feature_results,
         "scenarios": per_scenario,
     }
+
+
+def _framework_profile_for(runner_name: str, scan: Optional[dict]) -> Optional[dict]:
+    """Busca la ficha del scan cuyo slug aparece en el nombre del runner.
+
+    Ej.: el runner "langgraph-claude" matchea la ficha slug="langgraph".
+    Sin match (p. ej. los baselines) devuelve None → packs completos.
+    """
+    if not scan:
+        return None
+    name = runner_name.lower()
+    candidates = [
+        fw for fw in scan.get("frameworks", [])
+        if fw.get("slug") and fw["slug"].lower() in name
+    ]
+    # el slug más largo gana ("openai-agents" antes que "agents")
+    return max(candidates, key=lambda fw: len(fw["slug"]), default=None)
 
 
 def run_benchmark(
@@ -296,17 +376,29 @@ def run_benchmark(
     tier: str = "standard",
     domain: Optional[str] = None,
     max_workers: int = 4,
+    include_feature_packs: bool = True,
 ) -> dict:
-    """Ejecuta el benchmark completo contra todos los runners y lo persiste."""
+    """Ejecuta el benchmark completo contra todos los runners y lo persiste.
+
+    Con `include_feature_packs` (default), cada runner recibe además los
+    packs de escenarios derivados de su ficha del scan (vínculo
+    scan→escenarios); los runners sin ficha reciben los 4 packs completos.
+    """
     runners = runners or {**REFERENCE_RUNNERS, **runners_from_env()}
     scenarios = generate_scenarios(tier, domain)
+    scan = load_scan() if include_feature_packs else None
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
     started_at = utc_now_iso()
 
-    frameworks = [
-        evaluate_framework(name, runner, scenarios, max_workers)
-        for name, runner in runners.items()
-    ]
+    frameworks = []
+    for name, runner in runners.items():
+        feature_scens = None
+        if include_feature_packs:
+            profile = _framework_profile_for(name, scan)
+            feature_scens = generate_feature_packs(profile, domain)
+        frameworks.append(
+            evaluate_framework(name, runner, scenarios, max_workers, feature_scens)
+        )
     frameworks.sort(key=lambda f: -f["metrics"]["crs"])
 
     payload = {
@@ -352,6 +444,7 @@ def run_full_pipeline(
     runners: Optional[dict[str, Runner]] = None,
     extra_frameworks: Optional[list[dict]] = None,
     max_workers: int = 4,
+    include_feature_packs: bool = True,
 ) -> dict:
     """Lanza el pipeline completo de Coesita y devuelve un resumen.
 
@@ -360,8 +453,8 @@ def run_full_pipeline(
     3. Testing automatizado     → results.json + history.jsonl
     """
     scan = run_scan(extra_frameworks)
-    generation = run_generation(tier, domain)
-    results = run_benchmark(runners, tier, domain, max_workers)
+    generation = run_generation(tier, domain, scan=scan)
+    results = run_benchmark(runners, tier, domain, max_workers, include_feature_packs)
     return {
         "run_id": results["run_id"],
         "tier": tier,
