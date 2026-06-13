@@ -116,8 +116,8 @@ PACK_SCHEDULES = [
     {"id": "feat_ramp", "category": "ramp", "active_from_turn": 3, "texts_per_turn": 1},
     {"id": "feat_shock", "category": "shock", "active_from_turn": 2, "texts_per_turn": 2},
 ]
-
-PACK_N_VARIANTS = 3   # 2 schedules × 3 variantes = 6 escenarios por pack
+# Un escenario por (pack × schedule × dominio declarado en el scan), así el
+# tamaño del pack refleja cuántos dominios cubre el framework.
 
 
 def packs_for_features(features: dict) -> list[str]:
@@ -134,14 +134,22 @@ def generate_feature_packs(
 ) -> list[Scenario]:
     """Genera los escenarios de los packs aplicables a un framework escaneado.
 
-    `framework` es una ficha de frameworks.json (con su dict `features`).
-    Sin ficha (None) se generan los 4 packs completos — útil para baselines
-    y runners sin entrada en el scan.
+    `framework` es una ficha de frameworks.json (con sus dicts `features` y
+    `domains`). Los dominios de los escenarios salen del scan:
+      - `domain` explícito → solo ese dominio (tiene prioridad).
+      - si no, los `domains` de la ficha (los que el framework declara).
+      - si la ficha no declara dominios (o no hay ficha) → los 5 dominios FTM.
+    Sin ficha (None) se generan los 4 packs completos en los 5 dominios — útil
+    para baselines y runners sin entrada en el scan.
     """
     features = (framework or {}).get("features")
     pack_ids = packs_for_features(features) if features is not None else list(FEATURE_PACKS)
 
-    doms = [domain] if domain else DOMAINS
+    if domain:
+        doms = [domain]
+    else:
+        scan_domains = [d for d in (framework or {}).get("domains", []) if d in DOMAINS]
+        doms = scan_domains or DOMAINS
     scenarios: list[Scenario] = []
     counter = 0
 
@@ -150,11 +158,10 @@ def generate_feature_packs(
         channel = pack["channel"]
         texts = pack["texts"]
         for schedule in PACK_SCHEDULES:
-            for variant in range(PACK_N_VARIANTS):
+            for di, dom in enumerate(doms):
                 counter += 1
-                dom = doms[variant % len(doms)]
                 event_pool = STAY_EVENTS[dom]
-                event = event_pool[variant % len(event_pool)]
+                event = event_pool[di % len(event_pool)]
 
                 pressure_turns: list[list[str]] = []
                 active_channels: list[list[str]] = []
@@ -171,7 +178,7 @@ def generate_feature_packs(
                         active_channels.append([])
 
                 scenarios.append(Scenario(
-                    scenario_id=f"feat_{pack_id}_{dom}_{schedule['id']}_v{variant + 1}_{counter:03d}",
+                    scenario_id=f"feat_{pack_id}_{dom}_{schedule['id']}_{counter:03d}",
                     domain=dom,
                     condition="stay",
                     schedule_id=schedule["id"],
@@ -186,15 +193,18 @@ def generate_feature_packs(
 
 
 def pack_descriptions() -> list[dict]:
-    """Metadatos de los packs para scenarios.json y el dashboard."""
-    n_per_pack = len(PACK_SCHEDULES) * PACK_N_VARIANTS
+    """Metadatos de los packs para scenarios.json y el dashboard.
+
+    `n_scenarios_per_domain` es el nº de escenarios que el pack genera por cada
+    dominio que el framework declare en el scan (un escenario por schedule).
+    """
     return [
         {
             "pack": pack_id,
             "channel": pack["channel"],
             "requires_any": pack["requires_any"],
             "measures": pack["measures"],
-            "n_scenarios": n_per_pack,
+            "n_scenarios_per_domain": len(PACK_SCHEDULES),
             "example_pressure": pack["texts"][:2],
         }
         for pack_id, pack in FEATURE_PACKS.items()

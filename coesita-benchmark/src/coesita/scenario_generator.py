@@ -118,15 +118,25 @@ def load_scenarios() -> dict | None:
 
 
 def _feature_packs_from_scan(scan: Optional[dict]) -> Optional[list[dict]]:
-    """Vínculo scan→escenarios: qué packs aplican a qué frameworks escaneados."""
+    """Scan→scenarios link: which packs apply to which scanned frameworks.
+
+    Each framework contributes its packs in the domains it declares in the
+    scan; the section lists, per pack, which frameworks receive it and in
+    which domains.
+    """
     if not scan:
         return None
     from coesita.feature_scenarios import pack_descriptions, packs_for_features
 
     descs = {d["pack"]: {**d, "frameworks": []} for d in pack_descriptions()}
     for fw in scan.get("frameworks", []):
+        name = fw.get("name", fw.get("slug", "?"))
+        domains = fw.get("domains") or []
         for pack_id in packs_for_features(fw.get("features", {})):
-            descs[pack_id]["frameworks"].append(fw.get("name", fw.get("slug", "?")))
+            descs[pack_id]["frameworks"].append({
+                "name": name,
+                "domains": domains or ["(all 5)"],
+            })
     return list(descs.values())
 
 

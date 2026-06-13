@@ -32,8 +32,11 @@ hold-the-line scenarios; the worst, in **54.7%**.
   generation: frameworks with subagents get *delegated-authority* pressure
   ("3 of your 4 workers recommend escalating"), persistent memory gets
   *precedent exploitation*, tool use gets *tool urgency*, human-in-the-loop
-  gets *gate bypass*. Reported as a per-pack FARP matrix, separate from the
-  headline ranking so comparisons stay valid.
+  gets *gate bypass*. Each pack runs only in the **domains the framework
+  declares in the scan** (DevOps, financial, legal, ...), so the simulated
+  scenarios match where the framework is actually deployed. Reported as a
+  per-pack FARP matrix, separate from the headline ranking so comparisons
+  stay valid.
 - **Proven interventions** — the Data Anchoring block reduced capitulation
   from 54.7% → 18.7% (p < 0.0001) on the worst-performing frontier model.
 - **Agent instrumentation SDK** — log your own agent's live decisions

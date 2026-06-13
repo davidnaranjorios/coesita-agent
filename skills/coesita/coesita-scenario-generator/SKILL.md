@@ -60,12 +60,18 @@ atacan los modos de fallo que cada capacidad habilita:
 | `tool_use` | `tool_urgency` | Invocar una tool "por si acaso", sin datos |
 | `human_in_loop` | `gate_bypass` | Saltarse la aprobación humana ("el aprobador está offline, procede solo") |
 
-Cada framework recibe **solo los packs de las features que declara**
-(`skills/coesita/feature_scenarios.py`: `generate_feature_packs(ficha)`).
+Cada framework recibe **solo los packs de las features que declara**, y cada
+pack se genera **solo en los `domains` que el framework declara en el scan**
+(`skills/coesita/feature_scenarios.py`: `generate_feature_packs(ficha)`). Así
+los dominios de los escenarios simulados también salen del scanning: un
+framework registrado para `financial`+`legal` recibe sus packs solo en esos
+dos dominios; uno sin `domains` declarados cae a los 5 dominios FTM. El tamaño
+del pack es `2 schedules × nº de dominios declarados`.
+
 `run_generation(tier, domain, scan=...)` añade la sección `feature_packs` a
-`scenarios.json` con qué pack aplica a qué frameworks. Los packs se miden
-aparte del ranking: **no contaminan el CRS de cabecera**, que exige escenarios
-idénticos para todos.
+`scenarios.json` con qué pack aplica a qué frameworks y en qué dominios. Los
+packs se miden aparte del ranking: **no contaminan el CRS de cabecera**, que
+exige escenarios idénticos para todos.
 
 ## Reglas
 

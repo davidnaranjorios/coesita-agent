@@ -603,10 +603,14 @@ def _render_scenarios(data: dict) -> str:
     # Packs derivados del scan (vínculo Fase 1 → Fase 2)
     packs_html = ""
     for p in data.get("feature_packs") or []:
-        fw_list = ", ".join(p.get("frameworks", [])[:6])
+        fw_items = []
+        for fw in p.get("frameworks", [])[:6]:
+            doms = ", ".join(fw.get("domains", []))
+            fw_items.append(f"{fw.get('name', '?')} <span style='color:#64748b;'>[{doms}]</span>")
+        fw_list = "<br>".join(fw_items)
         more = len(p.get("frameworks", [])) - 6
         if more > 0:
-            fw_list += f" (+{more})"
+            fw_list += f"<br>(+{more})"
         examples = "".join(
             f'<li style="color:#64748b;font-size:0.72rem;">{t}</li>'
             for t in p.get("example_pressure", [])
@@ -624,10 +628,11 @@ def _render_scenarios(data: dict) -> str:
   <h2>Feature packs — escenarios derivados del scan</h2>
   <p style="font-size:0.75rem;color:#475569;margin-bottom:10px;">
     Generados a partir de las features de frameworks.json. Cada framework recibe solo
-    los packs de las capacidades que declara; se miden aparte del ranking.
+    los packs de las capacidades que declara, en los dominios que declara en el scan;
+    se miden aparte del ranking.
   </p>
   <table>
-    <thead><tr><th>Pack</th><th>Canal</th><th>Qué mide</th><th>Aplica a</th><th>Presión de ejemplo</th></tr></thead>
+    <thead><tr><th>Pack</th><th>Canal</th><th>Qué mide</th><th>Aplica a (framework [dominios])</th><th>Presión de ejemplo</th></tr></thead>
     <tbody>{packs_html}</tbody>
   </table>
 </div>""" if packs_html else ""
@@ -836,13 +841,15 @@ def _render_benchmark(scan: dict | None, results: dict | None, history: list[dic
                     f'<td style="text-align:center;color:{"#22c55e" if ok else "#334155"};">'
                     f'{"✓" if ok else "—"}</td>'
                 )
+            domains_str = ", ".join(fw.get("domains", [])) or "all 5"
             scan_rows += f"""
             <tr>
               <td style="font-weight:600;color:#c7d2fe;"><a href="{fw.get('repo', '#')}" style="color:inherit;">{fw['name']}</a></td>
               <td style="font-size:0.75rem;color:#64748b;">{fw.get('org', '')}</td>
               <td style="font-size:0.75rem;color:#64748b;">{fw.get('language', '')}</td>
               {cells}
-              <td style="font-size:0.7rem;color:#475569;max-width:260px;">{fw.get('notes', '')}</td>
+              <td style="font-size:0.7rem;color:#a5b4fc;max-width:160px;">{domains_str}</td>
+              <td style="font-size:0.7rem;color:#475569;max-width:240px;">{fw.get('notes', '')}</td>
             </tr>"""
     else:
         feature_headers = ""
@@ -954,8 +961,8 @@ def _render_benchmark(scan: dict | None, results: dict | None, history: list[dic
     <a href="/scanning/frameworks?refresh=true" style="color:#6366f1;font-weight:400;text-transform:none;">re-scan</a></h2>
   <div style="overflow-x:auto;">
   <table>
-    <thead><tr><th>Framework</th><th>Org</th><th>Lenguaje</th>{feature_headers}<th>Notas</th></tr></thead>
-    <tbody>{scan_rows if scan_rows else '<tr><td colspan="11" style="color:#475569;text-align:center;padding:20px;">Sin scan. Ejecuta el pipeline o visita /scanning/frameworks?refresh=true.</td></tr>'}</tbody>
+    <thead><tr><th>Framework</th><th>Org</th><th>Lenguaje</th>{feature_headers}<th>Dominios</th><th>Notas</th></tr></thead>
+    <tbody>{scan_rows if scan_rows else '<tr><td colspan="12" style="color:#475569;text-align:center;padding:20px;">Sin scan. Ejecuta el pipeline o visita /scanning/frameworks?refresh=true.</td></tr>'}</tbody>
   </table>
   </div>
 </div>

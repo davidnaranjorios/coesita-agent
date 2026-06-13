@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from skills.coesita.benchmark_store import (
     frameworks_path, load_json, save_json, utc_now_iso,
 )
+from skills.coesita.ftm_engine import DOMAINS
 
 # Características que se extraen de cada framework. Mantener esta lista
 # sincronizada con la tabla comparativa del dashboard (/benchmark).
@@ -31,6 +32,11 @@ FEATURE_KEYS = [
 ]
 
 
+def _valid_domains(domains) -> list[str]:
+    """Filtra a los dominios FTM soportados (el corpus solo cubre esos 5)."""
+    return [d for d in (domains or []) if d in DOMAINS]
+
+
 @dataclass
 class FrameworkInfo:
     """Ficha estructurada de un framework de agentes."""
@@ -40,6 +46,9 @@ class FrameworkInfo:
     repo: str
     language: str
     features: dict[str, bool] = field(default_factory=dict)
+    # Dominios FTM donde el framework se despliega típicamente (curado por la
+    # skill coesita-scanner). Vacío = uso general → escenarios en los 5.
+    domains: list[str] = field(default_factory=list)
     notes: str = ""
     source: str = "seed"          # "seed" | "web" | "manual"
     scanned_at: str = ""
@@ -48,6 +57,7 @@ class FrameworkInfo:
         d = asdict(self)
         # Garantiza que todas las features conocidas estén presentes
         d["features"] = {k: bool(self.features.get(k, False)) for k in FEATURE_KEYS}
+        d["domains"] = _valid_domains(self.domains)
         return d
 
 
@@ -63,6 +73,7 @@ SEED_FRAMEWORKS: list[FrameworkInfo] = [
         repo="https://github.com/NousResearch/hermes-agent", language="Python",
         features=_f(multi_agent=True, kanban_board=True, persistent_memory=True,
                     tool_use=True, subagents=True, human_in_loop=True, streaming=True),
+        domains=["devops_server"],
         notes="Base de Coesita. Kanban nativo (kanban_create/delegate_task), perfiles y skills.",
     ),
     FrameworkInfo(
@@ -70,6 +81,7 @@ SEED_FRAMEWORKS: list[FrameworkInfo] = [
         repo="https://github.com/microsoft/autogen", language="Python",
         features=_f(multi_agent=True, persistent_memory=True, tool_use=True,
                     subagents=True, human_in_loop=True, streaming=True),
+        domains=["devops_server", "financial"],
         notes="Conversaciones multi-agente (GroupChat); el fork comunitario AG2 mantiene la API clásica.",
     ),
     FrameworkInfo(
@@ -77,6 +89,7 @@ SEED_FRAMEWORKS: list[FrameworkInfo] = [
         repo="https://github.com/crewAIInc/crewAI", language="Python",
         features=_f(multi_agent=True, persistent_memory=True, tool_use=True,
                     subagents=True, human_in_loop=True),
+        domains=["financial", "legal", "devops_server"],
         notes="Equipos de agentes por roles (crew + tasks); memoria de corto/largo plazo opcional.",
     ),
     FrameworkInfo(
@@ -84,12 +97,14 @@ SEED_FRAMEWORKS: list[FrameworkInfo] = [
         repo="https://github.com/langchain-ai/langgraph", language="Python",
         features=_f(multi_agent=True, persistent_memory=True, tool_use=True,
                     subagents=True, human_in_loop=True, streaming=True),
+        domains=["devops_server", "financial", "medical"],
         notes="Grafos de estado con checkpointing persistente; interrupts nativos para human-in-the-loop.",
     ),
     FrameworkInfo(
         name="OpenAI Agents SDK (ex-Swarm)", slug="openai-agents", org="OpenAI",
         repo="https://github.com/openai/openai-agents-python", language="Python",
         features=_f(multi_agent=True, tool_use=True, subagents=True, streaming=True),
+        domains=["devops_server", "medical", "financial", "legal", "industrial"],
         notes="Sucesor oficial de Swarm: handoffs entre agentes, guardrails y tracing.",
     ),
     FrameworkInfo(
@@ -97,6 +112,7 @@ SEED_FRAMEWORKS: list[FrameworkInfo] = [
         repo="https://github.com/microsoft/semantic-kernel", language="C#/Python/Java",
         features=_f(multi_agent=True, persistent_memory=True, tool_use=True,
                     subagents=True, streaming=True),
+        domains=["financial", "legal"],
         notes="Plugins/planners empresariales; Agent Framework unifica SK y AutoGen.",
     ),
     FrameworkInfo(
@@ -104,24 +120,28 @@ SEED_FRAMEWORKS: list[FrameworkInfo] = [
         repo="https://github.com/run-llama/llama_index", language="Python",
         features=_f(multi_agent=True, persistent_memory=True, tool_use=True,
                     subagents=True, human_in_loop=True, streaming=True),
+        domains=["legal", "financial"],
         notes="Workflows dirigidos por eventos; contexto serializable entre pasos.",
     ),
     FrameworkInfo(
         name="smolagents", slug="smolagents", org="Hugging Face",
         repo="https://github.com/huggingface/smolagents", language="Python",
         features=_f(multi_agent=True, tool_use=True, subagents=True, streaming=True),
+        domains=["devops_server"],
         notes="Agentes minimalistas que escriben acciones como código Python (CodeAgent).",
     ),
     FrameworkInfo(
         name="PydanticAI", slug="pydantic-ai", org="Pydantic",
         repo="https://github.com/pydantic/pydantic-ai", language="Python",
         features=_f(tool_use=True, streaming=True, multi_agent=True),
+        domains=["financial", "devops_server"],
         notes="Salidas tipadas con validación Pydantic; foco en producción y testing.",
     ),
     FrameworkInfo(
         name="MetaGPT", slug="metagpt", org="DeepWisdom",
         repo="https://github.com/FoundationAgents/MetaGPT", language="Python",
         features=_f(multi_agent=True, persistent_memory=True, tool_use=True, subagents=True),
+        domains=["devops_server"],
         notes="Compañía de software simulada: roles SOP (PM, arquitecto, ingeniero).",
     ),
 ]
@@ -145,13 +165,16 @@ def scan_frameworks(extra: list[dict] | None = None) -> list[dict]:
             continue
         base = by_slug.get(slug, {
             "name": raw.get("name", slug), "slug": slug, "org": "", "repo": "",
-            "language": "", "features": {}, "notes": "", "source": "web",
+            "language": "", "features": {}, "domains": [], "notes": "", "source": "web",
         })
         merged = {**base, **{k: v for k, v in raw.items() if v not in (None, "")}}
         merged["features"] = {
             k: bool({**base.get("features", {}), **raw.get("features", {})}.get(k, False))
             for k in FEATURE_KEYS
         }
+        # domains: la entrada extra reemplaza (no mergea) si la trae; siempre
+        # se valida contra los 5 dominios FTM soportados por el corpus.
+        merged["domains"] = _valid_domains(raw.get("domains", base.get("domains", [])))
         merged["source"] = raw.get("source", "web")
         merged["scanned_at"] = now
         by_slug[slug] = merged

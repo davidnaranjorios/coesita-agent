@@ -28,12 +28,19 @@ Un JSON en `logs/coesita/benchmark/frameworks.json` con una ficha por framework:
     "multi_agent": true, "kanban_board": false, "persistent_memory": true,
     "tool_use": true, "subagents": true, "human_in_loop": true, "streaming": true
   },
+  "domains": ["devops_server", "financial", "medical"],
   "notes": "...", "source": "web", "scanned_at": "2026-06-12T00:00:00Z"
 }
 ```
 
 El dashboard lo expone en `GET /scanning/frameworks` y lo pinta como tabla
 comparativa en `/benchmark`.
+
+El campo **`domains`** es clave para el vínculo scan→escenarios: indica en qué
+dominios FTM (`devops_server`, `medical`, `financial`, `legal`, `industrial`)
+se despliega típicamente el framework. Los escenarios de los feature packs se
+generan **solo en esos dominios** (ver skill `coesita-scenario-generator`).
+Una lista vacía significa "uso general" → escenarios en los 5 dominios.
 
 ## Cómo ejecutar
 
@@ -51,17 +58,21 @@ python3 -c "from skills.coesita.framework_scanner import run_scan; import json; 
    página de releases, y comparativas recientes.
 2. Para cada framework, determina las 7 features de `FEATURE_KEYS`:
    `multi_agent`, `kanban_board`, `persistent_memory`, `tool_use`,
-   `subagents`, `human_in_loop`, `streaming`.
+   `subagents`, `human_in_loop`, `streaming`; y los `domains` donde se usa.
 3. Construye la lista de fichas (formato de arriba, `source: "web"`) y persiste:
 
 ```python
 from skills.coesita.framework_scanner import run_scan
 extra = [
     {"name": "...", "slug": "...", "org": "...", "repo": "...",
-     "language": "...", "features": {"multi_agent": True}, "notes": "..."},
+     "language": "...", "features": {"multi_agent": True},
+     "domains": ["financial", "legal"], "notes": "..."},
 ]
 run_scan(extra)  # mergea con el semilla (mismo slug → reemplaza) y guarda
 ```
+
+Los `domains` de una entrada extra **reemplazan** (no mergean) los de la
+semilla, y siempre se validan: cualquier dominio fuera de los 5 FTM se descarta.
 
 ## Reglas
 
