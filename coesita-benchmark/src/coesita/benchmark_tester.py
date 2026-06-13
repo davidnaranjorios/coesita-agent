@@ -357,7 +357,7 @@ def evaluate_framework(
 def _framework_profile_for(runner_name: str, scan: Optional[dict]) -> Optional[dict]:
     """Busca la ficha del scan cuyo slug aparece en el nombre del runner.
 
-    Ej.: el runner "langgraph-claude" matchea la ficha slug="langgraph".
+    Ej.: el runner "langgraph-app" matchea la ficha slug="langgraph".
     Sin match (p. ej. los baselines) devuelve None → packs completos.
     """
     if not scan:

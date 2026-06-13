@@ -39,8 +39,8 @@ docker compose up -d --force-recreate
 or:
 
 ```bash
-export COESITA_BENCHMARK_RUNNERS='{"my-model": {"model": "gpt-5.2", "api_key_env": "OPENAI_API_KEY"}}'
-export OPENAI_API_KEY=sk-...
+export COESITA_BENCHMARK_RUNNERS='{"my-agent": {"model": "<your-model-id>", "base_url": "https://your-endpoint/v1", "api_key_env": "YOUR_API_KEY"}}'
+export YOUR_API_KEY=...
 coesita run --tier standard
 ```
 

@@ -954,8 +954,8 @@ def detect_archetype(metrics: MetricsResult) -> ArchetypeResult:
         ),
         recommendation=(
             "Apply ANCHORING_BLOCK immediately. Validated: Data Anchoring reduced FARP_strict "
-            "from 54.7% → 18.7% (−36 pp) on GPT-5.2 (p<0.0001, FTM v2.2). "
-            "This is the primary intervention for Sudden Collapse."
+            "from 54.7% → 18.7% (−36 pp) on the worst-performing model in the FTM v2.2 cohort "
+            "(p<0.0001). This is the primary intervention for Sudden Collapse."
         ),
     )
 

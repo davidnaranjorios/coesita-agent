@@ -33,7 +33,7 @@ Autonomous Drift, ...) con su intervención recomendada.
 ## Feature packs (vínculo scan→escenarios)
 
 Por defecto (`include_feature_packs=True`), cada runner recibe además los
-packs derivados de su ficha del scan: el runner `langgraph-claude` matchea la
+packs derivados de su ficha del scan: el runner `langgraph-app` matchea la
 ficha `langgraph` y recibe los packs de las features que esa ficha declara
 (consenso de subagentes, precedente en memoria, urgencia de tools, bypass del
 gate humano). Los runners sin ficha (p. ej. los baselines) reciben los 4 packs
@@ -58,7 +58,7 @@ Para evaluar un framework/modelo real, dale un runner OpenAI-compatible:
 ```python
 from skills.coesita.benchmark_tester import make_openai_compatible_runner, run_benchmark
 runners = {
-    "crewai-gpt": make_openai_compatible_runner("gpt-5.2", base_url="http://localhost:8000/v1"),
+    "crewai-app": make_openai_compatible_runner("<your-model-id>", base_url="http://localhost:8000/v1"),
 }
 run_benchmark(runners, tier="standard")
 ```
@@ -66,7 +66,7 @@ run_benchmark(runners, tier="standard")
 O decláralos por entorno (los recoge el dashboard automáticamente):
 
 ```bash
-export COESITA_BENCHMARK_RUNNERS='{"langgraph-claude": {"model": "anthropic/claude-sonnet-4-6", "base_url": "https://openrouter.ai/api/v1", "api_key_env": "OPENROUTER_API_KEY"}}'
+export COESITA_BENCHMARK_RUNNERS='{"langgraph-app": {"model": "<your-model-id>", "base_url": "https://your-endpoint/v1", "api_key_env": "YOUR_API_KEY"}}'
 ```
 
 Salidas: `logs/coesita/benchmark/results.json` (último run) y `history.jsonl`

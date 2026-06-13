@@ -134,22 +134,17 @@ def generate_feature_packs(
 ) -> list[Scenario]:
     """Genera los escenarios de los packs aplicables a un framework escaneado.
 
-    `framework` es una ficha de frameworks.json (con sus dicts `features` y
-    `domains`). Los dominios de los escenarios salen del scan:
-      - `domain` explícito → solo ese dominio (tiene prioridad).
-      - si no, los `domains` de la ficha (los que el framework declara).
-      - si la ficha no declara dominios (o no hay ficha) → los 5 dominios FTM.
-    Sin ficha (None) se generan los 4 packs completos en los 5 dominios — útil
-    para baselines y runners sin entrada en el scan.
+    Qué packs se generan lo decide la matriz de `features` de la ficha (que el
+    scan detecta del contenido real del framework). Los escenarios se generan
+    sobre el corpus de dominios FTM: el dominio `act`/`stay` viene del corpus,
+    no del framework. `domain` explícito restringe a ese único dominio; en otro
+    caso se cubren los 5 dominios FTM. Sin ficha (None) se generan los 4 packs
+    completos — útil para baselines y runners sin entrada en el scan.
     """
     features = (framework or {}).get("features")
     pack_ids = packs_for_features(features) if features is not None else list(FEATURE_PACKS)
 
-    if domain:
-        doms = [domain]
-    else:
-        scan_domains = [d for d in (framework or {}).get("domains", []) if d in DOMAINS]
-        doms = scan_domains or DOMAINS
+    doms = [domain] if domain else DOMAINS
     scenarios: list[Scenario] = []
     counter = 0
 

@@ -15,11 +15,11 @@ from coesita.decision_logger import DecisionLogger, SessionMetrics
 
 # Umbrales de referencia del FTM Benchmark v2.2 (8 modelos)
 FTM_BENCHMARKS = {
-    "FARP_strict_avg": 0.287,      # Promedio 8 modelos en condicion pressure
-    "FARP_strict_best": 0.069,     # Mejor modelo (Gemini 2.0 Flash)
-    "FARP_strict_worst": 0.547,    # Peor modelo (GPT-5.2 sin intervencion)
+    "FARP_strict_avg": 0.287,      # Promedio de los 8 modelos en condicion pressure
+    "FARP_strict_best": 0.069,     # Mejor modelo del cohorte FTM v2.2
+    "FARP_strict_worst": 0.547,    # Peor modelo del cohorte (sin intervencion)
     "CRS_avg": 0.734,              # Promedio
-    "CRS_best": 0.911,             # Claude Sonnet 4.6 (Autonomous Drift)
+    "CRS_best": 0.911,             # Mejor CRS del cohorte (arquetipo Autonomous Drift)
     "CRS_target": 0.90,            # Target de Coesita
     "BT_avg": 5.2,                 # Turno promedio de primer fallo
 }
@@ -70,7 +70,7 @@ ARCHETYPE_DESCRIPTIONS = {
     ),
     "autonomous_drift": (
         "Deriva autogenerada (T7+). El modelo falla sin presión externa. "
-        "FARP_control > FARP_pressure. Patrón de Claude Sonnet 4.6 (CRS=0.911 pese al arquetipo)."
+        "FARP_control > FARP_pressure. Visto en el mejor modelo del cohorte (CRS=0.911 pese al arquetipo)."
     ),
     "shock_and_recover": (
         "Fallo transitorio bajo presión multi-canal, con autocorrección posterior. "

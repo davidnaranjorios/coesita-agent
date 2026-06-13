@@ -28,21 +28,36 @@ Un JSON en `logs/coesita/benchmark/frameworks.json` con una ficha por framework:
     "multi_agent": true, "kanban_board": false, "persistent_memory": true,
     "tool_use": true, "subagents": true, "human_in_loop": true, "streaming": true
   },
-  "domains": ["devops_server", "financial", "medical"],
   "notes": "...", "source": "web", "scanned_at": "2026-06-12T00:00:00Z"
 }
 ```
 
 El dashboard lo expone en `GET /scanning/frameworks` y lo pinta como tabla
-comparativa en `/benchmark`.
-
-El campo **`domains`** es clave para el vínculo scan→escenarios: indica en qué
-dominios FTM (`devops_server`, `medical`, `financial`, `legal`, `industrial`)
-se despliega típicamente el framework. Los escenarios de los feature packs se
-generan **solo en esos dominios** (ver skill `coesita-scenario-generator`).
-Una lista vacía significa "uso general" → escenarios en los 5 dominios.
+comparativa en `/benchmark`. Las `features` detectadas deciden qué packs de
+presión recibe el framework (ver skill `coesita-scenario-generator`). El scan
+**no asume dominios**: los escenarios se generan sobre el corpus FTM completo.
 
 ## Cómo ejecutar
+
+**Scan por contenido real del framework (lo preferido):** procesa los
+artefactos del framework/agente (system prompt, documentos RAG, código/config)
+y detecta sus features a partir de la evidencia — no asume nada.
+
+```python
+from skills.coesita.framework_scanner import scan_artifacts, run_scan
+
+ficha = scan_artifacts(
+    "My Agent", slug="my-agent",
+    system_prompt=open("agent_system_prompt.txt").read(),
+    rag_text=open("rag_corpus_sample.md").read(),
+    code=open("agent_config.py").read(),
+)
+run_scan(extra=[ficha])   # mergea la ficha detectada con el registro y guarda
+```
+
+`detect_features_from_text(*blobs)` es la primitiva: busca las señales de
+`FEATURE_SIGNALS` (más sintaxis de invocación `func()` para tool_use) en el
+texto y devuelve las 7 features. Determinista, sin red.
 
 **Scan rápido (registro semilla curado, sin red):**
 
@@ -58,21 +73,17 @@ python3 -c "from skills.coesita.framework_scanner import run_scan; import json; 
    página de releases, y comparativas recientes.
 2. Para cada framework, determina las 7 features de `FEATURE_KEYS`:
    `multi_agent`, `kanban_board`, `persistent_memory`, `tool_use`,
-   `subagents`, `human_in_loop`, `streaming`; y los `domains` donde se usa.
+   `subagents`, `human_in_loop`, `streaming`.
 3. Construye la lista de fichas (formato de arriba, `source: "web"`) y persiste:
 
 ```python
 from skills.coesita.framework_scanner import run_scan
 extra = [
     {"name": "...", "slug": "...", "org": "...", "repo": "...",
-     "language": "...", "features": {"multi_agent": True},
-     "domains": ["financial", "legal"], "notes": "..."},
+     "language": "...", "features": {"multi_agent": True}, "notes": "..."},
 ]
 run_scan(extra)  # mergea con el semilla (mismo slug → reemplaza) y guarda
 ```
-
-Los `domains` de una entrada extra **reemplazan** (no mergean) los de la
-semilla, y siempre se validan: cualquier dominio fuera de los 5 FTM se descarta.
 
 ## Reglas
 

@@ -193,43 +193,64 @@ def test_feature_packs_respect_framework_features():
                  "tool_urgency", "gate_bypass"):
         assert any(f"feat_{pack}_" in sid for sid in ids), f"falta pack {pack}"
 
-    # Sin ficha (baselines) → 4 packs × 2 schedules × 5 dominios
+    # Sin ficha (baselines) → 4 packs × 2 schedules × 5 dominios del corpus
     assert len(generate_feature_packs(None)) == 4 * 2 * 5
 
 
-def test_feature_pack_domains_come_from_scan():
+def test_feature_packs_cover_full_corpus_no_declared_domains():
     from coesita.feature_scenarios import generate_feature_packs
 
-    # La ficha declara solo 2 dominios → los escenarios solo usan esos
-    fw = {"features": {"tool_use": True, "subagents": True},
-          "domains": ["financial", "legal"]}
+    # Los escenarios cubren los 5 dominios FTM (no se restringen por ficha)
+    fw = {"features": {"tool_use": True, "subagents": True}}
     scens = generate_feature_packs(fw)
-    assert {s.domain for s in scens} == {"financial", "legal"}
-    # 2 packs aplicables × 2 schedules × 2 dominios
-    assert len(scens) == 2 * 2 * 2
+    assert {s.domain for s in scens} == set(DOMAINS)
+    # 2 packs aplicables × 2 schedules × 5 dominios
+    assert len(scens) == 2 * 2 * 5
 
-    # Ficha sin dominios → cae a los 5 dominios FTM
-    fw_all = {"features": {"tool_use": True}, "domains": []}
-    assert {s.domain for s in generate_feature_packs(fw_all)} == set(DOMAINS)
-
-    # El argumento domain explícito tiene prioridad sobre el scan
+    # El argumento domain explícito restringe a ese único dominio
     one = generate_feature_packs(fw, domain="medical")
     assert {s.domain for s in one} == {"medical"}
 
 
-def test_scan_carries_validated_domains():
-    frameworks = {f["slug"]: f for f in scan_frameworks()}
-    # smolagents declara solo devops_server en la semilla
-    assert frameworks["smolagents"]["domains"] == ["devops_server"]
-    # toda ficha trae el campo y solo con dominios FTM válidos
-    for fw in frameworks.values():
-        assert set(fw["domains"]) <= set(DOMAINS)
+def test_scan_has_no_domains_field():
+    # El scan ya NO asume dominios por framework
+    for fw in scan_frameworks():
+        assert "domains" not in fw
 
-    # una entrada extra con dominios inválidos los filtra
-    merged = {f["slug"]: f for f in scan_frameworks(
-        [{"slug": "langgraph", "domains": ["financial", "marketing", "bogus"]}]
-    )}
-    assert merged["langgraph"]["domains"] == ["financial"]
+
+def test_scan_artifacts_detects_features_from_content():
+    from coesita.framework_scanner import (
+        detect_features_from_text, scan_artifacts,
+    )
+
+    system_prompt = (
+        "You are an on-call agent. You may call tools like restart_service(). "
+        "You delegate subtasks to worker agents and wait for human approval "
+        "before acting. You retrieve context from a vector store."
+    )
+    feats = detect_features_from_text(system_prompt)
+    assert feats["tool_use"]            # "call tools" / restart_service()
+    assert feats["subagents"]           # "delegate" / "worker agents"
+    assert feats["human_in_loop"]       # "human approval"
+    assert feats["persistent_memory"]   # "vector store" / "retrieve"
+    assert not feats["kanban_board"]    # sin señal de kanban
+
+    ficha = scan_artifacts("MyAgent", system_prompt=system_prompt, slug="myagent")
+    assert ficha["slug"] == "myagent"
+    assert ficha["source"] == "artifact-scan"
+    assert "domains" not in ficha
+    assert ficha["features"] == feats
+
+    # La ficha detectada alimenta directamente la selección de packs
+    from coesita.feature_scenarios import packs_for_features
+    packs = packs_for_features(ficha["features"])
+    assert "tool_urgency" in packs and "delegated_authority" in packs
+
+
+def test_scan_artifacts_empty_content_detects_nothing():
+    from coesita.framework_scanner import scan_artifacts
+    ficha = scan_artifacts("Empty", system_prompt="just a plain assistant")
+    assert not any(ficha["features"].values())
 
 
 def test_feature_pack_scenarios_are_stay_only_with_pressure():
@@ -289,10 +310,8 @@ def test_scenarios_json_includes_feature_packs_section():
     assert set(packs) == {
         "delegated_authority", "precedent_exploitation", "tool_urgency", "gate_bypass",
     }
-    # cada pack lista los frameworks (con sus dominios del scan) que lo reciben
-    gate_fws = {fw["name"]: fw for fw in packs["gate_bypass"]["frameworks"]}
-    assert "Hermes Agent (Coesita base)" in gate_fws
-    assert gate_fws["Hermes Agent (Coesita base)"]["domains"] == ["devops_server"]
+    # cada pack lista los frameworks (por nombre) que lo reciben
+    assert "Hermes Agent (Coesita base)" in packs["gate_bypass"]["frameworks"]
     assert all(p["example_pressure"] for p in payload["feature_packs"])
 
 

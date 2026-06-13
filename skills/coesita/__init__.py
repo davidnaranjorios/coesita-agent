@@ -27,7 +27,8 @@ from skills.coesita.coesita_self_eval import evaluate_session, FTM_BENCHMARKS
 
 # Pipeline de benchmark (Fases 1-4: scanning → escenarios → testing → dashboard)
 from skills.coesita.framework_scanner import (
-    SEED_FRAMEWORKS, FrameworkInfo, load_scan, run_scan, scan_frameworks,
+    SEED_FRAMEWORKS, FrameworkInfo, detect_features_from_text, load_scan,
+    run_scan, scan_artifacts, scan_frameworks,
 )
 from skills.coesita.scenario_generator import (
     generate_benchmark_scenarios, load_scenarios, run_generation,
@@ -63,6 +64,7 @@ __all__ = [
     # Benchmark pipeline (Fases 1-4)
     "FrameworkInfo", "SEED_FRAMEWORKS",
     "scan_frameworks", "run_scan", "load_scan",
+    "scan_artifacts", "detect_features_from_text",
     "generate_benchmark_scenarios", "run_generation", "load_scenarios",
     "REFERENCE_RUNNERS", "make_openai_compatible_runner",
     "run_benchmark", "run_full_pipeline", "load_results",

@@ -28,15 +28,14 @@ hold-the-line scenarios; the worst, in **54.7%**.
   bootstrap confidence intervals — plus a **failure-archetype diagnosis**
   (Sudden Collapse, Staircase Erosion, Autonomous Drift, ...) with the
   validated prompt intervention for each one.
-- **Scan-driven feature packs** — the framework scan feeds scenario
-  generation: frameworks with subagents get *delegated-authority* pressure
-  ("3 of your 4 workers recommend escalating"), persistent memory gets
-  *precedent exploitation*, tool use gets *tool urgency*, human-in-the-loop
-  gets *gate bypass*. Each pack runs only in the **domains the framework
-  declares in the scan** (DevOps, financial, legal, ...), so the simulated
-  scenarios match where the framework is actually deployed. Reported as a
-  per-pack FARP matrix, separate from the headline ranking so comparisons
-  stay valid.
+- **Content-driven scanning + feature packs** — the scanner reads a
+  framework's actual artifacts (system prompt, RAG corpus, code/config) and
+  detects its capabilities from that content; it doesn't assume a registry.
+  The detected capabilities drive which pressure packs run: subagents →
+  *delegated-authority* ("3 of your 4 workers recommend escalating"),
+  persistent memory → *precedent exploitation*, tool use → *tool urgency*,
+  human-in-the-loop → *gate bypass*. Reported as a per-pack FARP matrix,
+  separate from the headline ranking so comparisons stay valid.
 - **Proven interventions** — the Data Anchoring block reduced capitulation
   from 54.7% → 18.7% (p < 0.0001) on the worst-performing frontier model.
 - **Agent instrumentation SDK** — log your own agent's live decisions
@@ -69,15 +68,16 @@ no API keys needed.
 
 ## Benchmark your own models and frameworks
 
-Point Coesita at any OpenAI-compatible endpoint — a hosted model, your
-LangGraph/CrewAI/AutoGen service, a local vLLM:
+Point Coesita at any chat-completions endpoint — a hosted model, your
+LangGraph/CrewAI/AutoGen service, a local vLLM. Name each entry after the
+framework slug so it matches its scan profile:
 
 ```bash
 export COESITA_BENCHMARK_RUNNERS='{
-  "langgraph-claude": {"model": "anthropic/claude-sonnet-4-6",
-                       "base_url": "https://openrouter.ai/api/v1",
-                       "api_key_env": "OPENROUTER_API_KEY"},
-  "my-agent":         {"model": "agent-v2", "base_url": "http://localhost:8000/v1"}
+  "langgraph-app": {"model": "<your-model-id>",
+                    "base_url": "https://your-endpoint/v1",
+                    "api_key_env": "YOUR_API_KEY"},
+  "my-agent":      {"model": "agent-v2", "base_url": "http://localhost:8000/v1"}
 }'
 coesita run --tier standard
 ```

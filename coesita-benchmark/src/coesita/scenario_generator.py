@@ -120,9 +120,9 @@ def load_scenarios() -> dict | None:
 def _feature_packs_from_scan(scan: Optional[dict]) -> Optional[list[dict]]:
     """Scan→scenarios link: which packs apply to which scanned frameworks.
 
-    Each framework contributes its packs in the domains it declares in the
-    scan; the section lists, per pack, which frameworks receive it and in
-    which domains.
+    Which packs a framework receives is decided by its feature matrix (detected
+    from the framework's real content); the section lists, per pack, which
+    frameworks receive it.
     """
     if not scan:
         return None
@@ -131,12 +131,8 @@ def _feature_packs_from_scan(scan: Optional[dict]) -> Optional[list[dict]]:
     descs = {d["pack"]: {**d, "frameworks": []} for d in pack_descriptions()}
     for fw in scan.get("frameworks", []):
         name = fw.get("name", fw.get("slug", "?"))
-        domains = fw.get("domains") or []
         for pack_id in packs_for_features(fw.get("features", {})):
-            descs[pack_id]["frameworks"].append({
-                "name": name,
-                "domains": domains or ["(all 5)"],
-            })
+            descs[pack_id]["frameworks"].append(name)
     return list(descs.values())
 
 
