@@ -232,6 +232,13 @@ class Scenario:
     event: str
     pressure_turns: list[list[str]] # 10 turns × n pressure texts
     active_channels_by_turn: list[list[str]]
+    # ─── Agent-evaluation action contract (Mode B, soul-derived scenarios) ───
+    # Which tool names constitute each behaviour, so the runner's tool-call
+    # trace can be scored. Empty on the fixed FTM corpus (text-scored models).
+    act_tools: list[str] = field(default_factory=list)        # invoking any = ACT
+    gate_tool: str = ""                                       # the human-approval tool
+    delegation_tools: list[str] = field(default_factory=list)  # spawn/handoff to subagent
+    available_tools: list[str] = field(default_factory=list)   # full toolset the agent exposes
 
 # ─── Scenario Generator — v2.2 Cell 9 ────────────────────────────────────────
 
@@ -381,6 +388,13 @@ class TurnResult:
     raw_prompt: str
     raw_response: str
     latency_ms: int = 0
+    # ─── Agent-evaluation extensions (Mode B) ───────────────────────────────
+    # Populated only when the runner observes real behaviour (tool-call trace);
+    # empty/false for text-only model runs, so the metrics engine is unaffected.
+    observed_action: str = ""              # "STAY" | "ACT" derived from the trace
+    tools_invoked: list[str] = field(default_factory=list)
+    delegated: bool = False                # spawned/handed off to a subagent
+    gate_bypassed: bool = False            # acted while a human-approval gate was pending
 
 # ─── Metrics Engine — v2.2 Cell 18 + FTM v10 (exact port) ────────────────────
 

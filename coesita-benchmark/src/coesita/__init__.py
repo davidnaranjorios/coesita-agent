@@ -31,21 +31,25 @@ from coesita.coesita_self_eval import evaluate_session, FTM_BENCHMARKS
 
 # Benchmark pipeline (scanning → scenarios → testing → dashboard)
 from coesita.framework_scanner import (
-    SEED_FRAMEWORKS, FrameworkInfo, detect_features_from_text, load_scan,
-    run_scan, scan_artifacts, scan_frameworks,
+    SEED_FRAMEWORKS, FrameworkInfo, detect_features_from_text, extract_tool_names,
+    load_scan, run_scan, scan_agent_soul, scan_artifacts, scan_frameworks,
 )
 from coesita.scenario_generator import (
     generate_benchmark_scenarios, load_scenarios, run_generation,
 )
 from coesita.benchmark_tester import (
-    REFERENCE_RUNNERS, load_results, make_openai_compatible_runner,
-    run_benchmark, run_full_pipeline,
+    REFERENCE_RUNNERS, RunnerResponse, evaluate_agent, load_results,
+    make_openai_compatible_runner, run_benchmark, run_full_pipeline,
+)
+from coesita.soul_scenarios import (
+    build_generation_prompt, generate_soul_scenarios, parse_generation,
+    scenarios_from_spec,
 )
 from coesita.feature_scenarios import (
     FEATURE_PACKS, classify_reason_extended, generate_feature_packs,
     packs_for_features,
 )
-from coesita.benchmark_store import data_dir, load_history
+from coesita.benchmark_store import agent_report_path, data_dir, load_history
 
 __all__ = [
     "__version__",
@@ -73,4 +77,9 @@ __all__ = [
     "FEATURE_PACKS", "generate_feature_packs", "packs_for_features",
     "classify_reason_extended",
     "data_dir", "load_history",
+    # Agent evaluation (Mode B — soul-derived scenarios + real-action scoring)
+    "scan_agent_soul", "extract_tool_names",
+    "RunnerResponse", "evaluate_agent", "agent_report_path",
+    "generate_soul_scenarios", "scenarios_from_spec",
+    "build_generation_prompt", "parse_generation",
 ]

@@ -46,7 +46,7 @@ from coesita.ftm_engine import (
 # ── Pipeline de benchmark (Fases 1-4) ─────────────────────────────────────────
 import threading
 
-from coesita.benchmark_store import load_history
+from coesita.benchmark_store import load_agent_reports, load_history
 from coesita.benchmark_tester import load_results, run_full_pipeline
 from coesita.framework_scanner import FEATURE_KEYS, load_scan, run_scan
 from coesita.scenario_generator import load_scenarios, run_generation
@@ -311,11 +311,25 @@ async def benchmark_page():
     ))
 
 
+# ── Modo B: Evaluación individual de agente (soul + acción real) ─────────────
+
+@app.get("/api/agents")
+async def api_agents():
+    """Reportes individuales de evaluación de agente (JSON)."""
+    return {"agents": load_agent_reports()}
+
+
+@app.get("/agents", response_class=HTMLResponse)
+async def agents_page():
+    return HTMLResponse(_render_agents(load_agent_reports()))
+
+
 # ── Render HTML ───────────────────────────────────────────────────────────────
 
 _NAV_LINKS = [
     ("/", "Robustness"),
-    ("/benchmark", "Benchmark"),
+    ("/benchmark", "Models"),
+    ("/agents", "Agents"),
     ("/scenarios", "Scenarios"),
     ("/scanning/frameworks", "Frameworks (JSON)"),
 ]
@@ -988,6 +1002,107 @@ async function runBenchmark() {{
 }}
 </script>
 
+</body>
+</html>"""
+
+
+def _pct(v) -> str:
+    try:
+        return f"{float(v) * 100:.0f}%"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _render_agent_card(r: dict) -> str:
+    m = r.get("metrics", {})
+    b = r.get("behavior", {})
+    a = r.get("archetype", {})
+    soul = r.get("soul", {})
+    crs = m.get("crs", 0.0)
+    crs_color = "#22c55e" if crs >= 0.9 else "#f59e0b" if crs >= 0.75 else "#ef4444"
+
+    def _beh(label, key, hint):
+        v = b.get(key, 0.0)
+        color = "#22c55e" if (v or 0) == 0 else "#f59e0b" if (v or 0) < 0.34 else "#ef4444"
+        return (
+            f'<div style="flex:1;min-width:150px;"><div style="font-size:1.4rem;font-weight:700;'
+            f'color:{color};">{_pct(v)}</div><div style="font-size:0.72rem;color:#94a3b8;">{label}</div>'
+            f'<div style="font-size:0.66rem;color:#475569;">{hint}</div></div>'
+        )
+
+    tools = b.get("tools_invoked_freq", {}) or {}
+    tools_str = ", ".join(f"{k} ×{v}" for k, v in list(tools.items())[:6]) or "—"
+    domain = soul.get("domain", r.get("soul", {}).get("domain", "—"))
+    ff = b.get("first_unwarranted_action_turn_mean")
+    ff_str = f"T{ff}" if ff else "never"
+
+    return f"""
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+      <h1 style="font-size:1.1rem;">{r.get('agent', 'Agent')}</h1>
+      <span style="font-size:0.75rem;color:#64748b;">domain: <b style="color:#94a3b8;">{domain}</b>
+        · evaluated {r.get('evaluated_at', '')[:10]} · {r.get('n_scenarios', 0)} scenarios</span>
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin:16px 0;align-items:center;">
+      <div><div style="font-size:2rem;font-weight:800;color:{crs_color};">{crs:.3f}</div>
+        <div style="font-size:0.72rem;color:#94a3b8;">CRS (robustness)</div></div>
+      <div><div style="font-size:2rem;font-weight:800;color:#e2e8f0;">{_pct(m.get('farp_strict'))}</div>
+        <div style="font-size:0.72rem;color:#94a3b8;">FARP (capitulation)</div></div>
+      <div style="border-left:1px solid #334155;padding-left:24px;">
+        <div style="font-size:0.95rem;font-weight:700;color:#e2e8f0;">{a.get('name', '—')}</div>
+        <div style="font-size:0.72rem;color:#94a3b8;">archetype · risk {a.get('risk', '—')}</div></div>
+    </div>
+    <h2 style="margin-top:8px;">Observed behaviour under pressure</h2>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:12px;">
+      {_beh('acted without warrant', 'unwarranted_action_under_pressure', 'invoked an action tool when it should hold')}
+      {_beh('bypassed human gate', 'gate_bypass_under_pressure', 'acted without the approval tool')}
+      {_beh('delegated away', 'delegation_under_pressure', 'handed the call to a subagent')}
+      <div style="flex:1;min-width:150px;"><div style="font-size:1.4rem;font-weight:700;color:#e2e8f0;">{ff_str}</div>
+        <div style="font-size:0.72rem;color:#94a3b8;">first unwarranted action</div>
+        <div style="font-size:0.66rem;color:#475569;">mean turn it broke</div></div>
+    </div>
+    <div style="font-size:0.75rem;color:#64748b;">Tools reached for: {tools_str}</div>
+    <div style="margin-top:12px;padding:12px;background:#0f172a;border-radius:8px;font-size:0.78rem;color:#cbd5e1;">
+      <b style="color:#6366f1;">Recommendation:</b> {a.get('recommendation', '—')}</div>
+  </div>"""
+
+
+def _render_agents(reports: list[dict]) -> str:
+    if not reports:
+        body = """
+  <div class="card">
+    <h1 style="font-size:1.1rem;">Agent evaluation</h1>
+    <p style="color:#94a3b8;margin-top:10px;font-size:0.85rem;">
+      No agent reports yet. Unlike the model leaderboard (fixed corpus, comparable),
+      each agent is evaluated <b>individually</b> on scenarios generated from its own soul,
+      scored by the actions it actually takes.</p>
+    <pre style="background:#0f172a;padding:14px;border-radius:8px;margin-top:12px;font-size:0.74rem;color:#cbd5e1;overflow:auto;">from coesita import scan_agent_soul, generate_soul_scenarios, evaluate_agent, make_openai_compatible_runner
+
+soul = scan_agent_soul("My Agent", system_prompt=open("SOUL.md").read(), tools=[...])
+gen  = make_openai_compatible_runner(MODEL, base_url=BASE_URL, api_key=KEY)
+scenarios, spec = generate_soul_scenarios(soul, generator=gen)
+report = evaluate_agent("My Agent", my_runner, scenarios, slug="my-agent")</pre>
+    <p style="color:#64748b;margin-top:10px;font-size:0.78rem;">
+      See <code>examples/run_hermes_agent.py</code> for the full reference implementation.</p>
+  </div>"""
+    else:
+        body = "".join(_render_agent_card(r) for r in reports)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coesita · Agent Evaluation</title>
+  <style>{_PAGE_CSS}</style>
+</head>
+<body>
+  <div style="max-width:1000px;margin:0 auto;">
+    {_nav("/agents")}
+    <h2>Agent evaluation · individual reports (soul-derived scenarios, real-action scoring)</h2>
+    {body}
+    <footer>Coesita · decisional robustness under social pressure (FTM v2.2)</footer>
+  </div>
 </body>
 </html>"""
 

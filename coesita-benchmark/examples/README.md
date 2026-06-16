@@ -1,12 +1,18 @@
-# Benchmarking a real agent
+# Benchmarking real models and agents
 
-The benchmark never touches your agent's code. It only needs a **runner** — a
-function `(system_prompt, messages) -> str` — and drives a 10-turn conversation
-through it, checking whether your agent holds the correct decision as social
-pressure mounts while the objective data stays fixed.
+There are **two modes** (see the main README): a comparable **model leaderboard**
+and an individual **agent evaluation**.
 
-Your agent must reply each turn in this format (the system prompt the benchmark
-sends already asks for it):
+| Example | Mode | Measures |
+|---|---|---|
+| `run_openai_endpoint.py` | A — model | A model's text STAY/ACT on the fixed FTM corpus (comparable ranking) |
+| `run_custom_agent.py` | A — model, custom interface | Same, for a non-OpenAI model interface |
+| `run_hermes_agent.py` | **B — agent** | A real agent on scenarios generated from its soul, scored by the actions it actually takes |
+
+In every mode the benchmark drives a 10-turn conversation through a **runner** —
+a function `(system_prompt, messages) -> str` (Mode A) or
+`-> RunnerResponse(text, tool_calls)` (Mode B, so it can observe real behaviour).
+Your agent replies each turn in this format (the system prompt already asks for it):
 
 ```
 DECISION: STAY        (or ACT)
@@ -14,12 +20,30 @@ CONFIDENCE: 7         (1-10)
 Reason: one sentence
 ```
 
-## Which example do I use?
+## Mode A — model leaderboard
 
-| Your agent is reachable as... | Use | Code needed |
+| Your model is reachable as... | Use | Code needed |
 |---|---|---|
 | An OpenAI-compatible `/chat/completions` endpoint (hosted model, vLLM, Ollama, LiteLLM, OpenRouter, your own OpenAI-shaped service) | `run_openai_endpoint.py` **or** the `COESITA_BENCHMARK_RUNNERS` env var | none |
 | A LangGraph graph / CrewAI crew / Python function / custom HTTP API | `run_custom_agent.py` (write an ~8-line adapter) | a tiny adapter |
+
+## Mode B — agent evaluation (individual)
+
+Use `run_hermes_agent.py` as the reference. The flow:
+
+1. `scan_agent_soul(...)` — ingest the agent's system prompt + tool list.
+2. `generate_soul_scenarios(soul, generator=...)` — the agent's **own model**
+   generates pressure scenarios in its real domain, using its real tools.
+3. The runner returns `RunnerResponse(text, tool_calls)` with the agent's
+   tool-call trace (for Hermes, captured via `tool_start_callback`).
+4. `evaluate_agent(...)` — scores by what the agent **did** (acted? delegated?
+   bypassed the human gate?) and writes an individual report to
+   `~/.coesita/benchmark/agents/<slug>.json`, shown on the dashboard's
+   **Agents** page.
+
+> Tools must be **enabled** so the benchmark can observe real behaviour. Point
+> the agent at a sandbox or mock toolset — `tool_start_callback` fires before
+> execution, so a live toolset would actually run side-effecting actions.
 
 ## Zero-code path (OpenAI-compatible endpoints)
 

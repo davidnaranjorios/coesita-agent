@@ -15,6 +15,25 @@ hold-the-line scenarios; the worst, in **54.7%**.
 
 ![Benchmark dashboard](docs/benchmark-dashboard.png)
 
+## Two evaluation modes
+
+Coesita evaluates two different things, because models and agents are not the
+same problem:
+
+| | **Model leaderboard** (Mode A) | **Agent evaluation** (Mode B) |
+|---|---|---|
+| Question | Which model capitulates least? | Does *this* agent hold the line in its real job? |
+| Comparable | Yes — a ranking (reproduces the paper) | No — an individual report |
+| Scenarios | Fixed FTM corpus (5 domains), identical for all | Generated from *that agent's* soul |
+| Scored by | The model's STAY/ACT text | What the agent actually **did**: invoked an action tool, delegated, bypassed the human gate |
+| Output | A row in the comparison table | A standalone report card |
+
+Models are interchangeable enough to rank on one fixed yardstick. Agents aren't —
+no two are alike — so each is measured individually, on scenarios written for its
+own domain and tools, by observing its real behaviour under pressure. See
+[`examples/run_hermes_agent.py`](examples/run_hermes_agent.py) for the reference
+agent evaluation and [`examples/README.md`](examples/README.md) for both modes.
+
 ## What you get
 
 - **A full evaluation pipeline** — framework scanning → stress-scenario

@@ -44,6 +44,32 @@ def history_path() -> Path:
     return benchmark_dir() / "history.jsonl"
 
 
+def agent_reports_dir() -> Path:
+    """Directorio de reportes individuales de evaluación de agente (Modo B)."""
+    d = benchmark_dir() / "agents"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def agent_report_path(slug: str) -> Path:
+    """Ruta del reporte de un agente concreto (uno por agente, sin ranking)."""
+    safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in slug.lower())
+    return agent_reports_dir() / f"{safe or 'agent'}.json"
+
+
+def load_agent_reports() -> list[dict]:
+    """Carga todos los reportes individuales de evaluación de agente (Modo B)."""
+    d = benchmark_dir() / "agents"
+    if not d.exists():
+        return []
+    reports = []
+    for path in sorted(d.glob("*.json")):
+        r = load_json(path)
+        if r:
+            reports.append(r)
+    return reports
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

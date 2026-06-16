@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""Benchmark a real Hermes agent (the AIAgent class in run_agent.py).
+"""Evaluate a real Hermes agent INDIVIDUALLY (Mode B — soul + real actions).
 
-A Hermes agent is a tool-calling loop over a backing model. There are two
-things you might want to measure:
+This is the reference implementation of agent evaluation:
 
-  Option 1 (quick): just the backing model's robustness.
-      Don't use this file — point COESITA_BENCHMARK_RUNNERS at the same
-      base_url/model Hermes uses (see examples/README.md). Zero code.
+  1. Read the agent's COMPLETE soul (system prompt + tools).
+  2. The agent's OWN backing model generates pressure scenarios in the agent's
+     real operational domain, using its real tools.
+  3. Run the real Hermes agent with TOOLS ENABLED, capturing its tool-call
+     trace each turn via tool_start_callback.
+  4. Score by what the agent DID (invoked an action tool? delegated? bypassed
+     the human-approval gate?), not by what it said.
+  5. Emit an individual report — no cross-agent ranking.
 
-  Option 2 (this file): the FULL Hermes agent — its system prompt, SOUL
-      identity, and reasoning loop. This wraps AIAgent.run_conversation in a
-      coesita runner so the benchmark drives the agent through the 10-turn
-      pressure conversation and reads its STAY/ACT decisions.
+Contrast with Mode A (the model leaderboard): that uses the fixed FTM corpus and
+text-only scoring to compare MODELS. Agents are evaluated individually here.
 
 Prerequisites:
-  - A backing model endpoint (the agent needs an LLM to reason).
-      export OPENAI_BASE_URL="http://localhost:30000/v1"   # or your provider
-      export OPENAI_API_KEY="..."
-      export HERMES_MODEL="your-model-id"
-  - Run this from the Hermes repo root so `run_agent` is importable, with the
-    coesita package installed (pip install ./coesita-benchmark).
+  export OPENAI_BASE_URL="http://localhost:30000/v1"   # the agent's model
+  export OPENAI_API_KEY="..."
+  export HERMES_MODEL="your-model-id"
+
+  Run from the Hermes repo root (so `run_agent` imports) with coesita installed.
+
+SAFETY: tools are ENABLED so the benchmark can observe real behaviour. Point the
+agent at a SANDBOX or mock toolset — tool_start_callback fires before execution,
+so a real toolset would actually run side-effecting actions during the test.
 
 Run:
     python coesita-benchmark/examples/run_hermes_agent.py
@@ -27,56 +32,77 @@ Run:
 
 import os
 
-from coesita import run_benchmark
+from coesita import (
+    evaluate_agent,
+    generate_soul_scenarios,
+    make_openai_compatible_runner,
+    RunnerResponse,
+    scan_agent_soul,
+)
 
-# Import the real Hermes agent from the repo.
 from run_agent import AIAgent
 
+# The agent's real tools. Replace with the toolset your Hermes agent exposes
+# (or introspect it). The scenario generator classifies which of these is the
+# consequential action / human-approval gate / delegation.
+HERMES_TOOLS = [
+    "kanban_create", "delegate_task", "request_human_approval",
+    "run_shell", "restart_service", "send_message", "read_file",
+]
 
-def make_hermes_runner() -> "callable":
-    """Build a coesita runner backed by a real Hermes AIAgent.
+BASE_URL = os.environ.get("OPENAI_BASE_URL", "http://localhost:30000/v1")
+API_KEY = os.environ.get("OPENAI_API_KEY", "")
+MODEL = os.environ.get("HERMES_MODEL", "")
 
-    Toolsets are disabled: FTM measures the *decision* (STAY/ACT expressed in
-    text), not real tool execution, so the agent shouldn't run commands during
-    the benchmark. The FTM system prompt already instructs the response format.
-    """
-    base_url = os.environ.get("OPENAI_BASE_URL", "http://localhost:30000/v1")
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    model = os.environ.get("HERMES_MODEL", "")
 
-    def runner(system_prompt: str, messages: list[dict]) -> str:
-        # Fresh agent per turn = stateless replay of the full conversation.
-        # The benchmark accumulates `messages`; the last one is the new turn.
-        agent = AIAgent(
-            base_url=base_url,
-            api_key=api_key,
-            model=model,
-            enabled_toolsets=[],        # no real tools during the benchmark
-            quiet_mode=True,
-            max_iterations=1,           # one reasoning turn, then answer
-            load_soul_identity=True,    # include the SOUL.md identity (set False to test without it)
-        )
-        result = agent.run_conversation(
-            user_message=messages[-1]["content"],
-            system_message=system_prompt,
-            conversation_history=messages[:-1],
-        )
-        return result["final_response"]
-
-    return runner
+def hermes_runner(system_prompt: str, messages: list[dict]) -> RunnerResponse:
+    """Drive a real Hermes agent and capture its tool-call trace for the turn."""
+    trace: list[dict] = []
+    agent = AIAgent(
+        base_url=BASE_URL, api_key=API_KEY, model=MODEL,
+        enabled_toolsets=None,        # TOOLS ON — we must observe real behaviour
+        quiet_mode=True,
+        max_iterations=4,             # allow it to actually reach for a tool
+        load_soul_identity=True,      # include the SOUL.md identity
+        # tool_start_callback(tool_call_id, name, args) — fires before execution
+        tool_start_callback=lambda _id, name, args: trace.append(
+            {"name": name, "args": args}
+        ),
+    )
+    result = agent.run_conversation(
+        user_message=messages[-1]["content"],
+        system_message=system_prompt,
+        conversation_history=messages[:-1],
+    )
+    return RunnerResponse(result["final_response"], tool_calls=trace)
 
 
 if __name__ == "__main__":
-    results = run_benchmark(
-        {"hermes-agent": make_hermes_runner()},   # slug "hermes" -> matches scan profile
-        tier="standard",                           # 30 scenarios x 10 turns = 300 turns
-        max_workers=2,                             # be gentle on your model endpoint
+    # 1. Ingest the agent's soul (here we read the repo SOUL.md as the system prompt).
+    soul_text = ""
+    for path in ("SOUL.md", os.path.expanduser("~/.hermes/SOUL.md")):
+        if os.path.exists(path):
+            soul_text = open(path, encoding="utf-8").read()
+            break
+    soul = scan_agent_soul("Hermes Agent", slug="hermes",
+                           system_prompt=soul_text, tools=HERMES_TOOLS)
+
+    # 2. The agent's OWN model generates the scenarios (detailed prompt → model-agnostic).
+    generator = make_openai_compatible_runner(MODEL, base_url=BASE_URL, api_key=API_KEY)
+    scenarios, spec = generate_soul_scenarios(soul, generator=generator, tier="standard")
+    print(f"Generated {len(scenarios)} scenarios in domain '{spec['domain']}'. "
+          f"Action tool(s): {spec['act_tools']}  Gate: {spec['gate_tool'] or '(none)'}")
+
+    # 3. Evaluate the real agent individually.
+    report = evaluate_agent(
+        "Hermes Agent", hermes_runner, scenarios, slug="hermes",
+        soul_summary={"domain": spec["domain"], "tools": soul["tools"]},
     )
-    for fw in results["frameworks"]:
-        m = fw["metrics"]
-        print(
-            f"{fw['framework']:>22}  CRS {m['crs']:.3f}  "
-            f"FARP {m['farp_strict']:.0%}  PRI {m['pri']:.2f}  "
-            f"-> {fw['archetype']['name']}"
-        )
-    print("\nDashboard: coesita dashboard  ->  http://localhost:5050/benchmark")
+
+    m, b = report["metrics"], report["behavior"]
+    print(f"\nCRS {m['crs']:.3f}  FARP {m['farp_strict']:.0%}  -> {report['archetype']['name']}")
+    print(f"Under pressure: acted-without-warrant {b['unwarranted_action_under_pressure']:.0%}, "
+          f"gate-bypass {b['gate_bypass_under_pressure']:.0%}, "
+          f"delegated {b['delegation_under_pressure']:.0%}")
+    print(f"Tools reached for: {b['tools_invoked_freq']}")
+    print("\nFull report saved under ~/.coesita/benchmark/agents/hermes.json")

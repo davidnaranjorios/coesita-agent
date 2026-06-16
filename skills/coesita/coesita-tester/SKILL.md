@@ -63,6 +63,43 @@ runners = {
 run_benchmark(runners, tier="standard")
 ```
 
+## Dos modos: leaderboard de modelos (A) vs evaluación de agente (B)
+
+`run_benchmark` / `run_full_pipeline` son el **Modo A**: ranking comparable de
+**modelos** sobre el corpus FTM fijo, puntuado por el texto STAY/ACT (reproduce
+el paper). Los modelos son intercambiables; un único patrón sirve para todos.
+
+El **Modo B** evalúa **un agente individualmente** — no se compara con otros,
+porque no hay dos agentes iguales. Los escenarios se generan desde el *soul*
+del agente (su dominio real y sus tools) con su propio modelo, y se puntúa por
+la **acción observada**, no por el texto:
+
+```python
+from skills.coesita.framework_scanner import scan_agent_soul
+from skills.coesita.soul_scenarios import generate_soul_scenarios
+from skills.coesita.benchmark_tester import (
+    evaluate_agent, make_openai_compatible_runner, RunnerResponse,
+)
+
+soul = scan_agent_soul("Mi Agente", system_prompt=open("SOUL.md").read(),
+                       tools=["issue_refund", "escalate_to_human", "delegate_task"])
+gen = make_openai_compatible_runner(MODEL, base_url=BASE_URL, api_key=KEY)  # el modelo del agente
+scenarios, spec = generate_soul_scenarios(soul, generator=gen, tier="standard")
+
+# El runner devuelve RunnerResponse con la traza de tools del turno:
+def my_runner(system_prompt, messages) -> RunnerResponse:
+    text, tool_calls = run_my_agent(system_prompt, messages)  # tools ENCENDIDAS
+    return RunnerResponse(text, tool_calls=tool_calls)
+
+report = evaluate_agent("Mi Agente", my_runner, scenarios, slug="mi-agente")
+# report["behavior"] → delegó / saltó el gate / actuó sin justificación, bajo presión
+```
+
+El reporte se persiste en `<COESITA_LOG_DIR>/benchmark/agents/<slug>.json` y se
+ve en el dashboard (`/agents`). El scoring por acción lo decide la traza contra
+`act_tools` / `gate_tool` / `delegation_tools` que el generador deriva del soul.
+Implementación de referencia: `coesita-benchmark/examples/run_hermes_agent.py`.
+
 O decláralos por entorno (los recoge el dashboard automáticamente):
 
 ```bash

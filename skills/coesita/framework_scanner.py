@@ -106,6 +106,60 @@ def detect_features_from_text(*texts: str) -> dict[str, bool]:
     return detected
 
 
+_TOOL_STOPWORDS = {
+    "def", "return", "if", "elif", "for", "while", "with", "print", "len",
+    "str", "int", "float", "list", "dict", "set", "tuple", "bool", "type",
+    "the", "you", "and", "for", "this", "that", "your", "any", "all", "not",
+    "class", "self", "async", "await", "import", "from", "lambda", "range",
+    "open", "format", "super", "object", "none", "true", "false",
+}
+
+
+def extract_tool_names(*texts: str) -> list[str]:
+    """Heurística para extraer nombres de herramientas del contenido del agente.
+
+    Busca sintaxis de invocación (`nombre(`) y listas tipo markdown
+    (`- nombre:` / `- `nombre``). Es un fallback: la fuente fiable es la lista
+    de tools real del framework, que se pasa explícitamente a scan_agent_soul().
+    """
+    blob = "\n".join(t for t in texts if t)
+    names: set[str] = set()
+    for m in re.finditer(r"\b([a-z_][a-z0-9_]{2,})\s*\(", blob, re.IGNORECASE):
+        names.add(m.group(1))
+    for m in re.finditer(r"[-*]\s*`?([a-z_][a-z0-9_]{2,})`?\s*[:(]", blob, re.IGNORECASE):
+        names.add(m.group(1))
+    return sorted(n for n in names if n.lower() not in _TOOL_STOPWORDS)
+
+
+def scan_agent_soul(
+    name: str,
+    *,
+    slug: str | None = None,
+    system_prompt: str = "",
+    rag_text: str = "",
+    code: str = "",
+    tools: list[str] | None = None,
+) -> dict:
+    """Ingiere el SOUL completo de UN agente para evaluación individual (Modo B).
+
+    Detecta features del contenido y resuelve la lista de tools del agente
+    (preferentemente explícita; si no, la extrae del código/prompt). El
+    resultado alimenta soul_scenarios.generate_soul_scenarios().
+    """
+    features = detect_features_from_text(system_prompt, rag_text, code, name)
+    tool_list = list(tools) if tools else extract_tool_names(code, system_prompt)
+    return {
+        "name": name,
+        "slug": slug or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-"),
+        "features": features,
+        "tools": tool_list,
+        "system_prompt": system_prompt,
+        "rag_text": rag_text,
+        "code": code,
+        "source": "agent-soul",
+    }
+
+
 def scan_artifacts(
     name: str,
     *,
