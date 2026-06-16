@@ -2,13 +2,17 @@
 #
 # Active once this directory lives in its own repository (GitHub reads
 # workflows only from the repo root). On every tag `v*`:
-#   1. run the test suite
-#   2. build wheel + sdist
-#   3. build the Docker image
-#   4. attach artifacts to a GitHub Release
+#   1. run the full test suite
+#   2. build the Python wheel + sdist
+#   3. build the Docker image and push to GHCR
+#   4. attach wheel + sdist + Docker tarball to a GitHub Release
 #
-# To also push the image to a registry, add a docker/login-action step and
-# a push, or wire your sales platform's webhook to the release event.
+# Prerequisites (set as GitHub Actions secrets / variables):
+#   GITHUB_TOKEN — automatically injected by Actions (read/write for packages)
+#
+# The Docker image lands at:
+#   ghcr.io/<owner>/<repo>:latest
+#   ghcr.io/<owner>/<repo>:<tag>   (e.g. v1.0.0)
 
 name: release
 
@@ -17,7 +21,12 @@ on:
     tags: ["v*"]
   pull_request:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
+  # ─── 1. Tests ───────────────────────────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
     steps:
@@ -29,7 +38,8 @@ jobs:
       - run: ruff check src tests
       - run: pytest -q
 
-  build:
+  # ─── 2. Build wheel + sdist ─────────────────────────────────────────────────
+  build-wheel:
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -39,12 +49,79 @@ jobs:
           python-version: "3.11"
       - run: pip install build
       - run: python -m build
-      - run: docker build -t coesita-benchmark:${{ github.ref_name }} .
-      - run: docker save coesita-benchmark:${{ github.ref_name }} | gzip > dist/coesita-benchmark-docker.tar.gz
-      - name: Create GitHub Release with artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ─── 3. Build + push Docker image to GHCR ──────────────────────────────────
+  build-docker:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Save a tarball for the Release artifact (no registry push on PRs)
+      - name: Export Docker image as tarball
         if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker build -t coesita-benchmark:${{ github.ref_name }} .
+          docker save coesita-benchmark:${{ github.ref_name }} | gzip \
+            > coesita-benchmark-docker-${{ github.ref_name }}.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: docker-tarball
+          path: coesita-benchmark-docker-*.tar.gz
+
+  # ─── 4. GitHub Release ──────────────────────────────────────────────────────
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-wheel, build-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: docker-tarball
+          path: dist/
+      - name: Create GitHub Release with artifacts
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           files: |
             dist/*.whl
             dist/*.tar.gz

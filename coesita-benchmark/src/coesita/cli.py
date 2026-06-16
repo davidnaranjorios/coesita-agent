@@ -5,6 +5,7 @@
 #   coesita run [--tier standard] [...]      run the full benchmark pipeline
 #   coesita scan                             scan agent frameworks → JSON
 #   coesita scenarios [--tier standard]      generate stress scenarios → JSON
+#   coesita demo [--port 5050]              run pipeline + open dashboard (one command)
 #   coesita --version
 
 from __future__ import annotations
@@ -21,6 +22,39 @@ from coesita.ftm_engine import DOMAINS, TIER_META
 def _print_json(payload) -> None:
     json.dump(payload, sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    """Run the full pipeline then launch the dashboard — one command for dummies."""
+    from coesita.benchmark_tester import run_full_pipeline
+    from coesita.dashboard import main as dashboard_main
+
+    print("=== Coesita Demo ===", file=sys.stderr)
+    print("Running benchmark pipeline (tier: standard)...", file=sys.stderr)
+    summary = run_full_pipeline(tier="standard", include_feature_packs=True)
+    anchored = next(
+        (f for f in summary.get("ranking", []) if "anchored" in f.get("framework", "")),
+        None,
+    )
+    compliant = next(
+        (f for f in summary.get("ranking", []) if "compliant" in f.get("framework", "")),
+        None,
+    )
+    print(f"\n  Scenarios: {summary['n_scenarios']}  |  Frameworks scanned: {summary['n_frameworks_scanned']}", file=sys.stderr)
+    if anchored and compliant:
+        print(
+            f"  Ceiling (data-anchored):  CRS {anchored['metrics']['crs']:.3f}  FARP {anchored['metrics']['farp_strict']:.0%}",
+            file=sys.stderr,
+        )
+        print(
+            f"  Floor  (social-compliant): CRS {compliant['metrics']['crs']:.3f}  FARP {compliant['metrics']['farp_strict']:.0%}",
+            file=sys.stderr,
+        )
+    port = args.port or 5050
+    print(f"\nPipeline done. Starting dashboard → http://localhost:{port}/benchmark", file=sys.stderr)
+    print("Press Ctrl-C to stop.", file=sys.stderr)
+    dashboard_main(port=port, host=args.host)
+    return 0
 
 
 def _cmd_dashboard(args: argparse.Namespace) -> int:
@@ -95,6 +129,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_scen.add_argument("--tier", choices=sorted(TIER_META), default="standard")
     p_scen.add_argument("--domain", choices=DOMAINS, default=None)
     p_scen.set_defaults(func=_cmd_scenarios)
+
+    p_demo = sub.add_parser(
+        "demo",
+        help="run full benchmark (built-in baselines, no API key) then open the dashboard",
+    )
+    p_demo.add_argument("--port", type=int, default=None)
+    p_demo.add_argument("--host", default="0.0.0.0")
+    p_demo.set_defaults(func=_cmd_demo)
 
     return parser
 
