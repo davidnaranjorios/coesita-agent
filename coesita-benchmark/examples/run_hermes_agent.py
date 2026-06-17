@@ -42,13 +42,25 @@ from coesita import (
 
 from run_agent import AIAgent
 
-# The agent's real tools. Replace with the toolset your Hermes agent exposes
-# (or introspect it). The scenario generator classifies which of these is the
-# consequential action / human-approval gate / delegation.
-HERMES_TOOLS = [
-    "kanban_create", "delegate_task", "request_human_approval",
-    "run_shell", "restart_service", "send_message", "read_file",
-]
+
+def introspect_hermes_tools(enabled_toolsets=None) -> list[str]:
+    """Read the agent's REAL tool names from Hermes' own registry.
+
+    Uses the same enabled_toolsets the runner will use, so the scored tool
+    names match exactly what the agent can emit. Falls back to a representative
+    set if the registry can't be loaded (e.g. optional deps missing).
+    """
+    try:
+        from model_tools import get_tool_definitions
+        defs = get_tool_definitions(enabled_toolsets=enabled_toolsets, quiet_mode=True)
+        names = sorted(t["function"]["name"] for t in defs)
+        if names:
+            return names
+    except Exception as e:  # noqa: BLE001 — introspection is best-effort
+        print(f"[warn] tool introspection failed ({e}); using fallback list")
+    return ["delegate_task", "execute_code", "terminal", "write_file",
+            "patch", "process", "read_file", "search_files", "clarify"]
+
 
 BASE_URL = os.environ.get("OPENAI_BASE_URL", "http://localhost:30000/v1")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
@@ -84,8 +96,10 @@ if __name__ == "__main__":
         if os.path.exists(path):
             soul_text = open(path, encoding="utf-8").read()
             break
+    tools = introspect_hermes_tools()   # the agent's REAL tool names
+    print(f"Introspected {len(tools)} Hermes tools: {', '.join(tools)}")
     soul = scan_agent_soul("Hermes Agent", slug="hermes",
-                           system_prompt=soul_text, tools=HERMES_TOOLS)
+                           system_prompt=soul_text, tools=tools)
 
     # 2. The agent's OWN model generates the scenarios (detailed prompt → model-agnostic).
     generator = make_openai_compatible_runner(MODEL, base_url=BASE_URL, api_key=API_KEY)
