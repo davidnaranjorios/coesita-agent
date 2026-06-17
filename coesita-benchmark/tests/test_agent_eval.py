@@ -14,7 +14,7 @@ import pytest
 
 from coesita.benchmark_store import agent_report_path
 from coesita.benchmark_tester import (
-    RunnerResponse, evaluate_agent, run_scenario,
+    RunnerResponse, build_agent_eval_system_prompt, evaluate_agent, run_scenario,
 )
 from coesita.framework_scanner import (
     extract_tool_names, scan_agent_soul,
@@ -189,6 +189,49 @@ def test_evaluate_agent_produces_individual_report_and_persists():
     assert "issue_refund" in report["behavior"]["tools_invoked_freq"]
     # persistido como reporte individual (no en el ranking de modelos)
     assert agent_report_path("refundbot").exists()
+
+
+def test_agent_eval_prompt_instructs_acting_via_tools():
+    soul = scan_agent_soul("RefundBot", tools=_TOOLS)
+    scenarios, _ = generate_soul_scenarios(soul, generator=_fake_generator, tier="snapshot")
+    prompt = build_agent_eval_system_prompt(scenarios[0])
+    assert "ACTION PROTOCOL" in prompt
+    assert "issue_refund" in prompt                 # the act tool is named
+    assert "NOT acting" in prompt                    # text-ACT is not acting
+    assert "escalate_to_human" in prompt             # the gate tool is named
+
+
+def test_text_only_agent_flags_measurement_warning():
+    """Reproduce the real-world finding: an agent that only emits text (no
+    tool-calls) must be flagged, not silently scored act_acc=0 + 'critical'."""
+    soul = scan_agent_soul("TextOnly", slug="textonly", tools=_TOOLS)
+    scenarios, _ = generate_soul_scenarios(soul, generator=_fake_generator, tier="standard")
+
+    def text_only_agent(_s, _m):
+        return RunnerResponse("DECISION: ACT\nCONFIDENCE: 9\nReason: data warrants action",
+                              tool_calls=[])   # nunca invoca una tool
+
+    report = evaluate_agent("TextOnly", text_only_agent, scenarios, slug="textonly")
+    assert report["total_tool_calls"] == 0
+    assert report["measurement_warning"] is not None
+    assert "No tool calls" in report["measurement_warning"]
+    # las STAY (sin tool = STAY) siguen siendo válidas: aguantó la presión
+    assert report["metrics"]["stay_acc"] == 1.0
+
+
+def test_acting_agent_has_no_measurement_warning():
+    soul = scan_agent_soul("Actor", slug="actor", tools=_TOOLS)
+    scenarios, _ = generate_soul_scenarios(soul, generator=_fake_generator, tier="standard")
+
+    def acting_agent(_s, messages):
+        critical = any("duplicate" in m["content"].lower() for m in messages if m["role"] == "user")
+        tool = "issue_refund" if critical else "lookup_order"
+        return RunnerResponse("DECISION: ACT" if critical else "DECISION: STAY",
+                              tool_calls=[{"name": tool}])
+
+    report = evaluate_agent("Actor", acting_agent, scenarios, slug="actor")
+    assert report["total_tool_calls"] > 0
+    assert report["measurement_warning"] is None
 
 
 def test_perfect_agent_holds_the_line():

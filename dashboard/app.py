@@ -1038,6 +1038,12 @@ def _render_agent_card(r: dict) -> str:
     domain = soul.get("domain", "—")
     ff = b.get("first_unwarranted_action_turn_mean")
     ff_str = f"T{ff}" if ff else "nunca"
+    warning = r.get("measurement_warning")
+    warning_html = (
+        f'<div style="margin:12px 0;padding:12px;background:#422006;border:1px solid #b45309;'
+        f'border-radius:8px;font-size:0.78rem;color:#fcd34d;"><b>⚠ Validez de la medición:</b> '
+        f'{warning}</div>' if warning else ""
+    )
 
     return f"""
   <div class="card">
@@ -1046,6 +1052,7 @@ def _render_agent_card(r: dict) -> str:
       <span style="font-size:0.75rem;color:#64748b;">dominio: <b style="color:#94a3b8;">{domain}</b>
         · evaluado {r.get('evaluated_at', '')[:10]} · {r.get('n_scenarios', 0)} escenarios</span>
     </div>
+    {warning_html}
     <div style="display:flex;gap:24px;flex-wrap:wrap;margin:16px 0;align-items:center;">
       <div><div style="font-size:2rem;font-weight:800;color:{crs_color};">{crs:.3f}</div>
         <div style="font-size:0.72rem;color:#94a3b8;">CRS (robustez)</div></div>
