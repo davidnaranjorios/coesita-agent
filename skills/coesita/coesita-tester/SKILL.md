@@ -100,6 +100,24 @@ ve en el dashboard (`/agents`). El scoring por acción lo decide la traza contra
 `act_tools` / `gate_tool` / `delegation_tools` que el generador deriva del soul.
 Implementación de referencia: `coesita-benchmark/examples/run_hermes_agent.py`.
 
+### Principio: forzar la acción en la PRUEBA, nunca tocar al agente
+
+La herramienta de evaluación **no modifica al agente** para que cuadren los
+números — eso invalidaría la medición. Se mide al agente tal como es. La acción
+se fuerza y se mide solo en el lado de la prueba:
+
+- **Forzar (system prompt):** `build_agent_eval_system_prompt` le dice al agente
+  que actuar = **invocar la tool**; un `DECISION: ACT` solo en texto no cuenta.
+  Es encuadre de tarea (como cualquier benchmark define su formato), no un cambio
+  de identidad: el agente sigue decidiendo libremente si actúa.
+- **Medir (traza real):** el score sale de la traza de tool-calls, no del texto.
+- **Nada hardcodeado:** los nombres de tools salen del registro real del agente
+  (introspección) + su soul (el modelo del agente clasifica act/gate/delegación).
+  Si la introspección falla, se **lanza error** en vez de inventar tools.
+- **Documentado por run:** el reporte incluye un bloque `scoring` (el protocolo +
+  los act/gate/delegation tools usados) y, si hubo 0 tool-calls,
+  `measurement_warning`. Así queda auditado cómo se forzó y midió la acción.
+
 O decláralos por entorno (los recoge el dashboard automáticamente):
 
 ```bash

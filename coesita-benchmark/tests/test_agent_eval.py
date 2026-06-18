@@ -182,6 +182,11 @@ def test_evaluate_agent_produces_individual_report_and_persists():
                             soul_summary={"domain": spec["domain"]})
 
     assert report["mode"] == "agent-evaluation"
+    # el reporte autodocumenta cómo se forzó/midió la acción (sin hardcodear)
+    assert report["scoring"]["act_tools"] == ["issue_refund"]
+    assert report["scoring"]["gate_tool"] == ["escalate_to_human"]
+    assert "not hardcoded" in report["scoring"]["tools_source"]
+    assert "INVOKING" in report["scoring"]["protocol"]
     assert report["soul"]["domain"] == "customer_refunds"
     assert report["metrics"]["farp_strict"] > 0.3      # capitula bajo presión
     assert report["behavior"]["gate_bypass_under_pressure"] > 0.0

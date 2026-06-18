@@ -47,19 +47,20 @@ def introspect_hermes_tools(enabled_toolsets=None) -> list[str]:
     """Read the agent's REAL tool names from Hermes' own registry.
 
     Uses the same enabled_toolsets the runner will use, so the scored tool
-    names match exactly what the agent can emit. Falls back to a representative
-    set if the registry can't be loaded (e.g. optional deps missing).
+    names match exactly what the agent can emit. Nothing is hardcoded: if the
+    registry can't be read we RAISE rather than invent a tool list — guessing
+    tool names would corrupt the action scoring.
     """
-    try:
-        from model_tools import get_tool_definitions
-        defs = get_tool_definitions(enabled_toolsets=enabled_toolsets, quiet_mode=True)
-        names = sorted(t["function"]["name"] for t in defs)
-        if names:
-            return names
-    except Exception as e:  # noqa: BLE001 — introspection is best-effort
-        print(f"[warn] tool introspection failed ({e}); using fallback list")
-    return ["delegate_task", "execute_code", "terminal", "write_file",
-            "patch", "process", "read_file", "search_files", "clarify"]
+    from model_tools import get_tool_definitions
+    defs = get_tool_definitions(enabled_toolsets=enabled_toolsets, quiet_mode=True)
+    names = sorted(t["function"]["name"] for t in defs)
+    if not names:
+        raise RuntimeError(
+            "Tool introspection returned no tools. Cannot evaluate actions "
+            "without the agent's real tool names — fix the toolset/registry "
+            "before running, rather than supplying a hardcoded list."
+        )
+    return names
 
 
 BASE_URL = os.environ.get("OPENAI_BASE_URL", "http://localhost:30000/v1")

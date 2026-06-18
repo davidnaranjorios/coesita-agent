@@ -45,6 +45,30 @@ Use `run_hermes_agent.py` as the reference. The flow:
 > the agent at a sandbox or mock toolset — `tool_start_callback` fires before
 > execution, so a live toolset would actually run side-effecting actions.
 
+### How tool use is forced, measured, and documented
+
+The benchmark **never modifies the agent** to make the numbers work — that would
+invalidate the measurement. The agent is measured as-is. Action is forced and
+scored entirely on the evaluation side:
+
+1. **Forced (system prompt):** for soul-derived scenarios the harness builds an
+   *action protocol* (`build_agent_eval_system_prompt`) telling the agent that
+   taking the consequential action means **invoking the tool** — a text-only
+   "DECISION: ACT" does not count as acting. This is task framing, like any
+   benchmark defining its response format; the agent still freely decides
+   whether to act.
+2. **Measured (real trace):** the score comes from the agent's actual tool-call
+   trace, not its text. Invoking an `act_tool` = ACT; not calling it = STAY;
+   calling it without the `gate_tool` = gate bypass.
+3. **Nothing hardcoded:** the tool names that define "acting" come from the
+   agent's own registry (introspected) + its soul (the agent's own model
+   classifies which tools are action / gate / delegation). The example raises
+   rather than guess if introspection fails.
+4. **Documented per run:** every report records a `scoring` block (the protocol
+   text + the exact act/gate/delegation tools used) and, if the agent emitted
+   zero tool-calls, a `measurement_warning` — so a reader can see exactly how
+   action was forced and measured, and whether the run was valid.
+
 ## Zero-code path (OpenAI-compatible endpoints)
 
 ```bash
